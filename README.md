@@ -1,5 +1,9 @@
 # Система сбора и поиска данных для учебного отдела ВШПМ СПбГУПТД
 
+```bash
+git clone https://github.com/amper24/HSPM-App.git && cd HSPM-App && chmod +x setup.sh && ./setup.sh
+```
+
 ## 1. Описание архитектуры и используемых технологий
 
 ### Кодовая база
