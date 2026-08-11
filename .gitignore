@@ -1,0 +1,26 @@
+# Папка с заданием
+Прил_Уч_отдел - задание/
+
+# Зависимости
+app/vendor/
+
+# Загруженные и экспортированные файлы
+app/uploads/
+app/exports/
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Docker (если не нужно хранить в репо)
+.env
+docker-compose.override.yml

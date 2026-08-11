@@ -1,0 +1,12 @@
+{
+    "name": "vshpm/edu-department",
+    "description": "Система сбора и поиска данных для учебного отдела ВШПМ СПбГУПТД",
+    "type": "project",
+    "require": {
+        "php": ">=7.2",
+        "phpoffice/phpspreadsheet": "^1.29"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

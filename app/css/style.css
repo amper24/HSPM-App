@@ -1,0 +1,148 @@
+/* Учебный отдел ВШПМ — стили */
+[v-cloak] { display: none; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+    background-color: #f0f2f5;
+    color: #333;
+}
+
+.app-header {
+    background-color: #1f2d3d;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+
+.app-header h2 {
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-info {
+    font-size: 14px;
+    color: #bfcbd9;
+}
+
+.app-aside {
+    background-color: #304156;
+}
+
+.app-aside .el-menu {
+    border-right: none;
+}
+
+.login-centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+}
+
+.login-box {
+    width: 400px;
+    padding: 30px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.1);
+}
+
+.login-box h3 {
+    text-align: center;
+    margin-bottom: 24px;
+    color: #303133;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.page-header h3 {
+    font-size: 20px;
+    color: #303133;
+}
+
+.filter-bar {
+    background: #fff;
+    padding: 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.filter-bar .el-form-item {
+    margin-bottom: 0;
+}
+
+.transfer-row {
+    background-color: #fef0f0 !important;
+}
+
+.cancel-row {
+    background-color: #fdf6ec !important;
+}
+
+.transfer-tag {
+    color: #f56c6c;
+    font-weight: bold;
+}
+
+.cancel-tag {
+    color: #e6a23c;
+    font-weight: bold;
+}
+
+.stat-card {
+    text-align: center;
+    padding: 20px;
+}
+
+.stat-card .stat-value {
+    font-size: 32px;
+    font-weight: bold;
+    color: #409EFF;
+}
+
+.stat-card .stat-label {
+    font-size: 14px;
+    color: #909399;
+    margin-top: 8px;
+}
+
+.free-classroom-card {
+    cursor: pointer;
+    border: 1px solid #e4e7ed;
+    transition: all .3s;
+}
+
+.free-classroom-card:hover {
+    border-color: #409EFF;
+    box-shadow: 0 2px 12px rgba(64,158,255,.2);
+}
+
+.el-table .warning-row {
+    background: oldlace;
+}
+
+.el-table .success-row {
+    background: #f0f9eb;
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учебный отдел ВШПМ СПбГУПТД</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.14/lib/theme-chalk/index.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app" v-cloak>
+        <el-container style="min-height:100vh">
+            <!-- Шапка -->
+            <el-header height="60px" class="app-header">
+                <div class="header-left">
+                    <h2>Учебный отдел ВШПМ</h2>
+                </div>
+                <div class="header-right" v-if="currentUser">
+                    <span class="user-info">{{ currentUser.full_name }} ({{ currentUser.role === 'admin' ? 'Администратор' : 'Пользователь' }})</span>
+                    <el-button type="danger" size="small" @click="logout" plain>Выйти</el-button>
+                </div>
+            </el-header>
+
+            <el-container>
+                <!-- Боковое меню -->
+                <el-aside width="220px" class="app-aside" v-if="currentUser">
+                    <el-menu :default-active="activeMenu" router background-color="#304156" text-color="#bfcbd9" active-text-color="#409EFF">
+                        <el-menu-item index="/">
+                            <i class="el-icon-s-home"></i>
+                            <span>Главная</span>
+                        </el-menu-item>
+                        <el-menu-item index="/schedule">
+                            <i class="el-icon-date"></i>
+                            <span>Расписание</span>
+                        </el-menu-item>
+                        <el-menu-item index="/classrooms">
+                            <i class="el-icon-office-building"></i>
+                            <span>Аудитории</span>
+                        </el-menu-item>
+                        <el-menu-item index="/teachers">
+                            <i class="el-icon-user"></i>
+                            <span>Преподаватели</span>
+                        </el-menu-item>
+                        <el-menu-item index="/software">
+                            <i class="el-icon-monitor"></i>
+                            <span>Программное обеспечение</span>
+                        </el-menu-item>
+                        <el-menu-item index="/import" v-if="currentUser.role === 'admin'">
+                            <i class="el-icon-upload2"></i>
+                            <span>Импорт данных</span>
+                        </el-menu-item>
+                        <el-menu-item index="/export" v-if="currentUser.role === 'admin'">
+                            <i class="el-icon-download"></i>
+                            <span>Экспорт / Отчеты</span>
+                        </el-menu-item>
+                        <el-menu-item index="/users" v-if="currentUser.role === 'admin'">
+                            <i class="el-icon-setting"></i>
+                            <span>Пользователи</span>
+                        </el-menu-item>
+                    </el-menu>
+                </el-aside>
+
+                <!-- Основной контент -->
+                <el-main v-if="currentUser">
+                    <!-- Форма входа (если не авторизован) -->
+                    <login-form v-if="!currentUser" @login-success="onLogin"></login-form>
+
+                    <!-- Страницы -->
+                    <dashboard-page v-if="currentRoute === '/'"></dashboard-page>
+                    <schedule-page v-if="currentRoute === '/schedule'"></schedule-page>
+                    <classrooms-page v-if="currentRoute === '/classrooms'"></classrooms-page>
+                    <teachers-page v-if="currentRoute === '/teachers'"></teachers-page>
+                    <software-page v-if="currentRoute === '/software'"></software-page>
+                    <import-page v-if="currentRoute === '/import'"></import-page>
+                    <export-page v-if="currentRoute === '/export'"></export-page>
+                    <users-page v-if="currentRoute === '/users'"></users-page>
+                </el-main>
+
+                <!-- Форма входа в центре -->
+                <el-main v-else class="login-centered">
+                    <login-form @login-success="onLogin"></login-form>
+                </el-main>
+            </el-container>
+        </el-container>
+    </div>
+
+    <script src="https://unpkg.com/vue@2.7.14/dist/vue.js"></script>
+    <script src="https://unpkg.com/element-ui@2.15.14/lib/index.js"></script>
+    <script src="https://unpkg.com/axios@0.27.2/dist/axios.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

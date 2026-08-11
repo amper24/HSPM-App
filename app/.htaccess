@@ -1,0 +1,25 @@
+RewriteEngine On
+
+# Проксирование API запросов на api/index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+# Отдача статики SPA (Vue)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.html [QSA,L]
+
+# Защита от просмотра директорий
+Options -Indexes
+
+# Защита конфиденциальных файлов
+<FilesMatch "\.(env|sql|md|lock)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Сжатие
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json
+</IfModule>
