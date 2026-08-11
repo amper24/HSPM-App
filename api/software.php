@@ -9,6 +9,19 @@
  */
 
 function handleSoftware(string $method, string $action, ?int $id): void {
+    if ($action === 'truncate') {
+        if ($method !== 'POST') jsonError('Метод не поддерживается', 405);
+        requireAdmin();
+        truncateSoftware();
+        return;
+    }
+
+    if ($action === 'buildings') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listSoftwareBuildings();
+        return;
+    }
+
     switch ($method) {
         case 'GET':
             if ($id !== null) {
@@ -34,6 +47,18 @@ function handleSoftware(string $method, string $action, ?int $id): void {
         default:
             jsonError('Метод не поддерживается', 405);
     }
+}
+
+function truncateSoftware(): void {
+    $db = getDB();
+    $db->exec('DELETE FROM software');
+    jsonSuccess(null, 'Таблица ПО очищена');
+}
+
+function listSoftwareBuildings(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT building FROM software WHERE building IS NOT NULL AND building != '' ORDER BY building");
+    jsonSuccess($stmt->fetchAll(PDO::FETCH_COLUMN));
 }
 
 function listSoftware(): void {

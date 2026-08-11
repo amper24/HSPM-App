@@ -21,6 +21,19 @@ function handleClassrooms(string $method, string $action, ?int $id): void {
         return;
     }
 
+    if ($action === 'truncate') {
+        if ($method !== 'POST') jsonError('Метод не поддерживается', 405);
+        requireAdmin();
+        truncateClassrooms();
+        return;
+    }
+
+    if ($action === 'room-types') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listRoomTypes();
+        return;
+    }
+
     switch ($method) {
         case 'GET':
             if ($id !== null) {
@@ -72,13 +85,19 @@ function listClassrooms(): void {
         }
     }
 
+    // Сортировка по местам
+    $orderBy = 'c.building, c.room_number';
+    if (!empty($_GET['sort_seats']) && in_array($_GET['sort_seats'], ['asc', 'desc'])) {
+        $orderBy = 'c.seats ' . strtoupper($_GET['sort_seats']) . ', c.building, c.room_number';
+    }
+
     $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
     $countStmt = $db->prepare("SELECT COUNT(*) FROM classrooms c {$whereSQL}");
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
 
-    $stmt = $db->prepare("SELECT c.* FROM classrooms c {$whereSQL} ORDER BY c.building, c.room_number LIMIT {$perPage} OFFSET {$offset}");
+    $stmt = $db->prepare("SELECT c.* FROM classrooms c {$whereSQL} ORDER BY {$orderBy} LIMIT {$perPage} OFFSET {$offset}");
     $stmt->execute($params);
     $items = $stmt->fetchAll();
 
@@ -239,4 +258,16 @@ function findFreeClassrooms(): void {
     $stmt = $db->prepare("SELECT c.* FROM classrooms c {$whereSQL} ORDER BY c.building, c.room_number");
     $stmt->execute($params);
     jsonSuccess($stmt->fetchAll());
+}
+
+function truncateClassrooms(): void {
+    $db = getDB();
+    $db->exec('DELETE FROM classrooms');
+    jsonSuccess(null, 'Таблица аудиторий очищена');
+}
+
+function listRoomTypes(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT room_type FROM classrooms WHERE room_type IS NOT NULL AND room_type != '' ORDER BY room_type");
+    jsonSuccess($stmt->fetchAll(PDO::FETCH_COLUMN));
 }

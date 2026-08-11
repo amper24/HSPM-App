@@ -17,6 +17,19 @@ function handleSchedule(string $method, string $action, ?int $id): void {
         return;
     }
 
+    if ($action === 'truncate') {
+        if ($method !== 'POST') jsonError('Метод не поддерживается', 405);
+        requireAdmin();
+        truncateSchedule();
+        return;
+    }
+
+    if ($action === 'groups') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listGroups();
+        return;
+    }
+
     switch ($method) {
         case 'GET':
             if ($id !== null) {
@@ -53,7 +66,6 @@ function listSchedule(): void {
     $where = [];
     $params = [];
 
-    // Фильтры по полям расписания и аудитории
     if (!empty($_GET['date_from'])) {
         $where[] = 's.date >= :date_from';
         $params['date_from'] = $_GET['date_from'];
@@ -94,12 +106,28 @@ function listSchedule(): void {
         $where[] = 's.numerator_denominator = :nd';
         $params['nd'] = $_GET['numerator_denominator'];
     }
+    if (!empty($_GET['group_code'])) {
+        $where[] = 's.group_code = :group_code';
+        $params['group_code'] = $_GET['group_code'];
+    }
+    if (!empty($_GET['discipline'])) {
+        $where[] = 's.discipline LIKE :discipline';
+        $params['discipline'] = '%' . $_GET['discipline'] . '%';
+    }
+    if (!empty($_GET['search'])) {
+        $where[] = "(s.discipline LIKE :search OR t.last_name LIKE :search2 OR s.group_code LIKE :search3 OR s.examiner LIKE :search4)";
+        $params['search'] = "%{$_GET['search']}%";
+        $params['search2'] = "%{$_GET['search']}%";
+        $params['search3'] = "%{$_GET['search']}%";
+        $params['search4'] = "%{$_GET['search']}%";
+    }
 
     $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
     $countStmt = $db->prepare("
         SELECT COUNT(*) FROM schedule s
         LEFT JOIN classrooms c ON s.classroom_id = c.id
+        LEFT JOIN teachers t ON s.teacher_id = t.id
         {$whereSQL}
     ");
     $countStmt->execute($params);
@@ -152,8 +180,12 @@ function createScheduleItem(): void {
     $db = getDB();
     $stmt = $db->prepare("
         INSERT INTO schedule (classroom_id, teacher_id, numerator_denominator, date, day_of_week,
+            discipline, group_department, group_code, teacher_department, teacher_position,
+            examiner, exam_type, session_start, session_end,
             pair_number, time_start, time_end, is_nonstandard_time, lesson_type, is_occupied, transfer_cancel)
         VALUES (:classroom_id, :teacher_id, :numerator_denominator, :date, :day_of_week,
+            :discipline, :group_department, :group_code, :teacher_department, :teacher_position,
+            :examiner, :exam_type, :session_start, :session_end,
             :pair_number, :time_start, :time_end, :is_nonstandard_time, :lesson_type, :is_occupied, :transfer_cancel)
     ");
     $stmt->execute([
@@ -162,6 +194,15 @@ function createScheduleItem(): void {
         'numerator_denominator' => $data['numerator_denominator'] ?? null,
         'date'                  => $data['date'],
         'day_of_week'           => $data['day_of_week'] ?? null,
+        'discipline'            => $data['discipline'] ?? null,
+        'group_department'      => $data['group_department'] ?? null,
+        'group_code'            => $data['group_code'] ?? null,
+        'teacher_department'    => $data['teacher_department'] ?? null,
+        'teacher_position'      => $data['teacher_position'] ?? null,
+        'examiner'              => $data['examiner'] ?? null,
+        'exam_type'             => $data['exam_type'] ?? null,
+        'session_start'         => $data['session_start'] ?? null,
+        'session_end'           => $data['session_end'] ?? null,
         'pair_number'           => $data['pair_number'] ?? null,
         'time_start'            => $data['time_start'] ?? null,
         'time_end'              => $data['time_end'] ?? null,
@@ -184,18 +225,19 @@ function updateScheduleItem(int $id): void {
 
     $fields = [
         'classroom_id', 'teacher_id', 'numerator_denominator', 'date', 'day_of_week',
+        'discipline', 'group_department', 'group_code', 'teacher_department', 'teacher_position',
+        'examiner', 'exam_type', 'session_start', 'session_end',
         'pair_number', 'time_start', 'time_end', 'is_nonstandard_time', 'lesson_type',
         'is_occupied', 'transfer_cancel'
     ];
+    $intFields = ['classroom_id', 'teacher_id', 'pair_number', 'is_nonstandard_time', 'is_occupied'];
     $set = [];
     $params = ['id' => $id];
 
     foreach ($fields as $f) {
         if (array_key_exists($f, $data)) {
             $set[] = "`{$f}` = :{$f}";
-            $params[$f] = in_array($f, ['classroom_id', 'teacher_id', 'pair_number', 'is_nonstandard_time', 'is_occupied'])
-                ? (int)$data[$f]
-                : $data[$f];
+            $params[$f] = in_array($f, $intFields) ? (int)$data[$f] : $data[$f];
         }
     }
     if (empty($set)) jsonError('Нет данных для обновления');
@@ -229,4 +271,21 @@ function bulkDeleteSchedule(): void {
     }
 
     jsonSuccess(null, 'Записи расписания удалены');
+}
+
+function truncateSchedule(): void {
+    $db = getDB();
+    $db->exec('DELETE FROM schedule');
+    jsonSuccess(null, 'Расписание очищено');
+}
+
+function listGroups(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT group_code FROM schedule WHERE group_code IS NOT NULL AND group_code != '' ORDER BY group_code");
+    $codes = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (empty($codes)) {
+        $stmt = $db->query("SELECT DISTINCT numerator_denominator FROM schedule WHERE numerator_denominator IS NOT NULL AND numerator_denominator != '' ORDER BY numerator_denominator");
+        $codes = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+    jsonSuccess($codes);
 }

@@ -1,6 +1,8 @@
 -- База данных "Учебный отдел ВШПМ" СПбГУПТД
 -- MySQL 5.7.21
 
+/*!40101 SET NAMES utf8 */;
+
 CREATE DATABASE IF NOT EXISTS `vshpm_edu` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
 USE `vshpm_edu`;
 
@@ -18,7 +20,7 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 INSERT INTO `users` (`username`, `password`, `role`, `full_name`) VALUES
-('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 'Администратор системы');
+('admin', '$2y$10$ymPDYHigW0Fr6cyeER4miu4s3EGCnml4j7x1LqnWG0tyTJpf/gMDO', 'admin', 'Администратор системы');
 
 -- Аудитории (статические характеристики помещения)
 CREATE TABLE `classrooms` (
@@ -56,6 +58,7 @@ CREATE TABLE `teachers` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_unique_fio` (`last_name`, `first_name`, `middle_name`),
   KEY `idx_last_name` (`last_name`),
   KEY `idx_department` (`department`),
   KEY `idx_employment_type` (`employment_type`)
@@ -64,11 +67,20 @@ CREATE TABLE `teachers` (
 -- Расписание занятий (зависит от classrooms и teachers)
 CREATE TABLE `schedule` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
-  `classroom_id` INT(11) NOT NULL,
+  `classroom_id` INT(11) DEFAULT NULL,
   `teacher_id` INT(11) DEFAULT NULL,
   `numerator_denominator` VARCHAR(20) DEFAULT NULL COMMENT 'Числитель/знаменатель',
-  `date` DATE NOT NULL COMMENT 'Дата занятия',
+  `date` DATE DEFAULT NULL COMMENT 'Дата занятия',
   `day_of_week` VARCHAR(20) DEFAULT NULL COMMENT 'День недели',
+  `discipline` VARCHAR(255) DEFAULT NULL COMMENT 'Дисциплина',
+  `group_department` VARCHAR(100) DEFAULT NULL COMMENT 'Кафедра группы',
+  `group_code` VARCHAR(50) DEFAULT NULL COMMENT 'Шифр группы',
+  `teacher_department` VARCHAR(100) DEFAULT NULL COMMENT 'Кафедра преподавателя',
+  `teacher_position` VARCHAR(100) DEFAULT NULL COMMENT 'Должность преподавателя',
+  `examiner` VARCHAR(255) DEFAULT NULL COMMENT 'Экзаменатор',
+  `exam_type` VARCHAR(20) DEFAULT NULL COMMENT 'Экзамен/консультация',
+  `session_start` DATE DEFAULT NULL COMMENT 'Начало сессии',
+  `session_end` DATE DEFAULT NULL COMMENT 'Конец сессии',
   `pair_number` INT(11) DEFAULT NULL COMMENT 'Номер пары',
   `time_start` TIME DEFAULT NULL COMMENT 'Время начала',
   `time_end` TIME DEFAULT NULL COMMENT 'Время окончания',
@@ -84,6 +96,7 @@ CREATE TABLE `schedule` (
   KEY `idx_date` (`date`),
   KEY `idx_transfer_cancel` (`transfer_cancel`),
   KEY `idx_is_occupied` (`is_occupied`),
+  UNIQUE KEY `idx_unique_schedule` (`classroom_id`, `date`, `pair_number`, `time_start`),
   CONSTRAINT `fk_schedule_classroom` FOREIGN KEY (`classroom_id`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_schedule_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -101,5 +114,6 @@ CREATE TABLE `software` (
   PRIMARY KEY (`id`),
   KEY `idx_classroom_id` (`classroom_id`),
   KEY `idx_building` (`building`),
+  UNIQUE KEY `idx_unique_software` (`room_number`, `building`, `name`),
   CONSTRAINT `fk_software_classroom` FOREIGN KEY (`classroom_id`) REFERENCES `classrooms` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

@@ -12,7 +12,11 @@ function handleUsers(string $method, string $action, ?int $id): void {
 
     switch ($method) {
         case 'GET':
-            listUsers();
+            if ($id !== null) {
+                getUser($id);
+            } else {
+                listUsers();
+            }
             break;
         case 'POST':
             createUser();
@@ -32,8 +36,35 @@ function handleUsers(string $method, string $action, ?int $id): void {
 
 function listUsers(): void {
     $db = getDB();
-    $stmt = $db->query('SELECT id, username, role, full_name, created_at, updated_at FROM users ORDER BY id');
-    jsonSuccess($stmt->fetchAll());
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $perPage = min(100, max(1, (int)($_GET['per_page'] ?? 20)));
+    $offset = ($page - 1) * $perPage;
+
+    $countStmt = $db->query('SELECT COUNT(*) FROM users');
+    $total = (int)$countStmt->fetchColumn();
+
+    $stmt = $db->prepare('SELECT id, username, role, full_name, created_at, updated_at FROM users ORDER BY id LIMIT ? OFFSET ?');
+    $stmt->execute([$perPage, $offset]);
+    $items = $stmt->fetchAll();
+
+    jsonSuccess([
+        'items' => $items,
+        'pagination' => [
+            'page'     => $page,
+            'per_page' => $perPage,
+            'total'    => $total,
+            'pages'    => ceil($total / $perPage),
+        ],
+    ]);
+}
+
+function getUser(int $id): void {
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id, username, role, full_name, created_at, updated_at FROM users WHERE id = :id');
+    $stmt->execute(['id' => $id]);
+    $user = $stmt->fetch();
+    if (!$user) jsonError('Пользователь не найден', 404);
+    jsonSuccess($user);
 }
 
 function createUser(): void {

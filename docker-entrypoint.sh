@@ -1,10 +1,14 @@
 #!/bin/bash
 set -e
 
+# Установка локали UTF-8 (важно для корректной работы с кириллицей)
+export LANG=ru_RU.UTF-8
+export LC_ALL=ru_RU.UTF-8
+
 # Ждем готовности MySQL
 echo "Ожидание MySQL ($DB_HOST:$DB_PORT)..."
 timeout=60
-while ! mysqladmin ping -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" --silent 2>/dev/null; do
+while ! mysqladmin ping -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" --silent --default-character-set=utf8 2>/dev/null; do
     sleep 2
     timeout=$((timeout - 2))
     if [ $timeout -le 0 ]; then
@@ -18,18 +22,54 @@ done
 echo "MySQL готов."
 
 # Создаем БД, если не существует
-mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null
+mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;" 2>/dev/null
 
 # Импортируем схему (только если таблиц еще нет)
-TABLE_COUNT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null || echo "0")
+TABLE_COUNT=$(mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null || echo "0")
 
 if [ "$TABLE_COUNT" -eq "0" ]; then
     echo "Первичная инициализация базы данных..."
-    mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < /var/www/html/database/schema.sql
+    mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < /var/www/html/database/schema.sql
     echo "База данных инициализирована."
 else
     echo "База данных уже содержит таблицы ($TABLE_COUNT шт.), пропускаем импорт схемы."
 fi
+
+# Миграции: добавляем новые колонки, если их еще нет
+echo "Проверка миграций..."
+for col in "discipline" "group_department" "group_code" "teacher_department" "teacher_position" "examiner" "exam_type" "session_start" "session_end"; do
+  EXISTS=$(mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='schedule' AND COLUMN_NAME='$col'" 2>/dev/null || echo "0")
+  if [ "$EXISTS" -eq "0" ]; then
+    case $col in
+      discipline) AFTER="day_of_week"; TYPE="VARCHAR(255) DEFAULT NULL COMMENT 'Дисциплина'" ;;
+      group_department) AFTER="discipline"; TYPE="VARCHAR(100) DEFAULT NULL COMMENT 'Кафедра группы'" ;;
+      group_code) AFTER="group_department"; TYPE="VARCHAR(50) DEFAULT NULL COMMENT 'Шифр группы'" ;;
+      teacher_department) AFTER="group_code"; TYPE="VARCHAR(100) DEFAULT NULL COMMENT 'Кафедра преподавателя'" ;;
+      teacher_position) AFTER="teacher_department"; TYPE="VARCHAR(100) DEFAULT NULL COMMENT 'Должность преподавателя'" ;;
+      examiner) AFTER="teacher_position"; TYPE="VARCHAR(255) DEFAULT NULL COMMENT 'Экзаменатор'" ;;
+      exam_type) AFTER="examiner"; TYPE="VARCHAR(20) DEFAULT NULL COMMENT 'Экзамен/консультация'" ;;
+      session_start) AFTER="exam_type"; TYPE="DATE DEFAULT NULL COMMENT 'Начало сессии'" ;;
+      session_end) AFTER="session_start"; TYPE="DATE DEFAULT NULL COMMENT 'Конец сессии'" ;;
+    esac
+    echo "  Добавление колонки $col..."
+    mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE schedule ADD COLUMN $col $TYPE AFTER $AFTER;" 2>/dev/null
+  fi
+done
+# Добавление уникальных ключей
+for idx in "schedule idx_unique_schedule" "software idx_unique_software"; do
+  tbl="${idx%% *}"
+  idxname="${idx##* }"
+  EXISTS=$(mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='$tbl' AND INDEX_NAME='$idxname'" 2>/dev/null || echo "0")
+  if [ "$EXISTS" -eq "0" ]; then
+    echo "  Добавление уникального ключа $idxname в $tbl..."
+    case $tbl in
+      schedule) mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE s1 FROM schedule s1 INNER JOIN schedule s2 ON s1.classroom_id = s2.classroom_id AND s1.date = s2.date AND s1.pair_number = s2.pair_number AND s1.time_start = s2.time_start AND s1.id > s2.id;" 2>/dev/null; mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE schedule ADD UNIQUE KEY idx_unique_schedule (classroom_id, date, pair_number, time_start);" 2>/dev/null ;;
+      software) mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE s1 FROM software s1 INNER JOIN software s2 ON s1.room_number = s2.room_number AND s1.building = s2.building AND s1.name = s2.name AND s1.id > s2.id;" 2>/dev/null; mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE software ADD UNIQUE KEY idx_unique_software (room_number, building, name);" 2>/dev/null ;;
+    esac
+  fi
+done
+
+echo "Миграции проверены."
 
 # Обновляем конфиг подключения к БД из переменных окружения
 cat > /var/www/html/api/config.php <<'PHPEOF'
@@ -78,7 +118,7 @@ function getDB(): PDO {
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET sql_mode=''",
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8",
         ];
         $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
     }
@@ -150,9 +190,19 @@ echo "========================================"
 echo "  Учебный отдел ВШПМ СПбГУПТД"
 echo "  Сервер запущен"
 echo "  БД: $DB_NAME@$DB_HOST:${DB_PORT:-3306}"
-echo "  Учетные данные по умолчанию:"
+echo "  Кодировка: UTF-8 (ru_RU.UTF-8)"
+echo "========================================"
+echo ""
+echo "  Доступ:"
+echo "    URL:    http://localhost:8080"
 echo "    Логин:  admin"
 echo "    Пароль: admin123"
+echo ""
+echo "  Управление из консоли:"
+echo "    docker exec vshpm-app php /var/www/html/hspm-admin help"
+echo "    docker exec vshpm-app php /var/www/html/hspm-admin info"
+echo "    docker exec vshpm-app php /var/www/html/hspm-admin stats"
+echo "    docker exec vshpm-app php /var/www/html/hspm-admin reset-password"
 echo "========================================"
 
 exec "$@"

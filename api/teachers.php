@@ -16,6 +16,37 @@ function handleTeachers(string $method, string $action, ?int $id): void {
         return;
     }
 
+    if ($action === 'truncate') {
+        if ($method !== 'POST') jsonError('Метод не поддерживается', 405);
+        requireAdmin();
+        truncateTeachers();
+        return;
+    }
+
+    if ($action === 'departments') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listDepartments();
+        return;
+    }
+
+    if ($action === 'degrees') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listDegrees();
+        return;
+    }
+
+    if ($action === 'titles') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listTitles();
+        return;
+    }
+
+    if ($action === 'employment-types') {
+        if ($method !== 'GET') jsonError('Метод не поддерживается', 405);
+        listEmploymentTypes();
+        return;
+    }
+
     switch ($method) {
         case 'GET':
             if ($id !== null) {
@@ -59,6 +90,14 @@ function listTeachers(): void {
     if (!empty($_GET['employment_type'])) {
         $where[] = 't.employment_type = :employment_type';
         $params['employment_type'] = $_GET['employment_type'];
+    }
+    if (!empty($_GET['degree'])) {
+        $where[] = 't.degree = :degree';
+        $params['degree'] = $_GET['degree'];
+    }
+    if (!empty($_GET['title'])) {
+        $where[] = 't.title = :title';
+        $params['title'] = $_GET['title'];
     }
     if (!empty($_GET['search'])) {
         $where[] = "(t.last_name LIKE :search OR t.first_name LIKE :search2 OR t.middle_name LIKE :search3)";
@@ -171,6 +210,36 @@ function deleteTeacher(int $id): void {
 
     $db->prepare('DELETE FROM teachers WHERE id = :id')->execute(['id' => $id]);
     jsonSuccess(null, 'Преподаватель удален');
+}
+
+function truncateTeachers(): void {
+    $db = getDB();
+    $db->exec('DELETE FROM teachers');
+    jsonSuccess(null, 'Таблица преподавателей очищена');
+}
+
+function listDepartments(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT department FROM teachers WHERE department IS NOT NULL AND department != '' ORDER BY department");
+    jsonSuccess($stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+function listDegrees(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT degree FROM teachers WHERE degree IS NOT NULL AND degree != '' ORDER BY degree");
+    jsonSuccess($stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+function listTitles(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT title FROM teachers WHERE title IS NOT NULL AND title != '' ORDER BY title");
+    jsonSuccess($stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+function listEmploymentTypes(): void {
+    $db = getDB();
+    $stmt = $db->query("SELECT DISTINCT employment_type FROM teachers WHERE employment_type IS NOT NULL AND employment_type != '' ORDER BY employment_type");
+    jsonSuccess($stmt->fetchAll(PDO::FETCH_COLUMN));
 }
 
 function searchTeachers(): void {

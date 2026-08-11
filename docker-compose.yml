@@ -42,8 +42,10 @@ services:
     volumes:
       - uploads:/var/www/html/uploads
       - exports:/var/www/html/exports
+      - backups:/var/www/html/backups
 
 volumes:
   mysql_data:
   uploads:
   exports:
+  backups:
