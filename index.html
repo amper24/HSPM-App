@@ -4,90 +4,598 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Учебный отдел ВШПМ СПбГУПТД</title>
-    <link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.14/lib/theme-chalk/index.css">
-    <link rel="stylesheet" href="css/style.css">
+    <style>
+        :root {--primary: #409EFF; --danger: #F56C6C; --success: #67C23A; --bg: #f0f2f5; --aside: #304156; --white: #fff;}
+        * {margin: 0; padding: 0; box-sizing: border-box;}
+        body {font: 14px/1.6 'Segoe UI', Arial, sans-serif; background: var(--bg); color: #333;}
+        h2, h3 {font-weight: 600;}
+        a {color: var(--primary); text-decoration: none;}
+        button {cursor: pointer; border: none; padding: 8px 18px; border-radius: 4px; font-size: 14px; transition: all 0.2s;}
+        button.primary {background: var(--primary); color: #fff;} button.primary:hover {background: #337ecc;}
+        button.danger {background: var(--danger); color: #fff;} button.danger:hover {background: #d44;}
+        button.success {background: var(--success); color: #fff;}
+        button.outline {background: transparent; border: 1px solid #dcdfe6; color: #606266;} button.outline:hover {border-color: var(--primary); color: var(--primary);}
+        input, select, textarea {padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; width: 100%; outline: none; transition: border 0.2s;}
+        input:focus, select:focus, textarea:focus {border-color: var(--primary);}
+        textarea {resize: vertical; min-height: 60px;}
+        label {display: block; margin-bottom: 4px; font-weight: 500; font-size: 13px; color: #606266;}
+        table {width: 100%; border-collapse: collapse; background: #fff; border-radius: 4px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);}
+        th, td {padding: 10px 14px; text-align: left; border-bottom: 1px solid #ebeef5; font-size: 13px;}
+        th {background: #f5f7fa; color: #909399; font-weight: 600;}
+        tr:hover td {background: #f5f7fa;}
+        .header {height: 56px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); position: sticky; top: 0; z-index: 100;}
+        .header h2 {font-size: 20px; color: #303133;}
+        .layout {display: flex; min-height: calc(100vh - 56px);}
+        .aside {width: 220px; background: var(--aside); padding-top: 8px; flex-shrink: 0;}
+        .aside a {display: flex; align-items: center; gap: 8px; padding: 12px 20px; color: #bfcbd9; font-size: 14px; transition: all 0.2s;}
+        .aside a:hover, .aside a.active {background: #1f2d3d; color: var(--primary);}
+        .main {flex: 1; padding: 24px; overflow-y: auto;}
+        .card {background: #fff; padding: 20px; border-radius: 6px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);}
+        .card-header {display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;}
+        .card-header h3 {font-size: 18px;}
+        .stat-cards {display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px;}
+        .stat-card {background: #fff; padding: 20px; border-radius: 6px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06);}
+        .stat-card .num {font-size: 32px; font-weight: 700; color: var(--primary);}
+        .stat-card .label {font-size: 13px; color: #909399; margin-top: 4px;}
+        .login-box {max-width: 380px; margin: 80px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);}
+        .login-box h3 {margin-bottom: 24px; text-align: center; font-size: 22px;}
+        .form-group {margin-bottom: 16px;}
+        .form-actions {margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end;}
+        .inline-form {display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;}
+        .inline-form .full {grid-column: 1 / -1;}
+        .badge {display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px;}
+        .badge-success {background: #e1f3d8; color: #67c23a;}
+        .badge-danger {background: #fde2e2; color: #f56c6c;}
+        .badge-warning {background: #faecd8; color: #e6a23c;}
+        .badge-info {background: #d9ecff; color: #409eff;}
+        .pagination {display: flex; justify-content: center; gap: 4px; margin-top: 16px;}
+        .pagination button {padding: 6px 12px; font-size: 13px;}
+        .alert {padding: 10px 16px; border-radius: 4px; margin-bottom: 12px;}
+        .alert-error {background: #fde2e2; color: #f56c6c; border: 1px solid #f56c6c;}
+        .alert-success {background: #e1f3d8; color: #67c23a; border: 1px solid #67c23a;}
+        .user-info {font-size: 14px; color: #606266; margin-right: 12px;}
+        .empty {text-align: center; padding: 40px; color: #909399;}
+        .color-red {color: #f56c6c; font-weight: 600;}
+    </style>
 </head>
 <body>
-    <div id="app" v-cloak>
-        <el-container style="min-height:100vh">
-            <!-- Шапка -->
-            <el-header height="60px" class="app-header">
-                <div class="header-left">
-                    <h2>Учебный отдел ВШПМ</h2>
-                </div>
-                <div class="header-right" v-if="currentUser">
-                    <span class="user-info">{{ currentUser.full_name }} ({{ currentUser.role === 'admin' ? 'Администратор' : 'Пользователь' }})</span>
-                    <el-button type="danger" size="small" @click="logout" plain>Выйти</el-button>
-                </div>
-            </el-header>
-
-            <el-container>
-                <!-- Боковое меню -->
-                <el-aside width="220px" class="app-aside" v-if="currentUser">
-                    <el-menu :default-active="activeMenu" router background-color="#304156" text-color="#bfcbd9" active-text-color="#409EFF">
-                        <el-menu-item index="/">
-                            <i class="el-icon-s-home"></i>
-                            <span>Главная</span>
-                        </el-menu-item>
-                        <el-menu-item index="/schedule">
-                            <i class="el-icon-date"></i>
-                            <span>Расписание</span>
-                        </el-menu-item>
-                        <el-menu-item index="/classrooms">
-                            <i class="el-icon-office-building"></i>
-                            <span>Аудитории</span>
-                        </el-menu-item>
-                        <el-menu-item index="/teachers">
-                            <i class="el-icon-user"></i>
-                            <span>Преподаватели</span>
-                        </el-menu-item>
-                        <el-menu-item index="/software">
-                            <i class="el-icon-monitor"></i>
-                            <span>Программное обеспечение</span>
-                        </el-menu-item>
-                        <el-menu-item index="/import" v-if="currentUser.role === 'admin'">
-                            <i class="el-icon-upload2"></i>
-                            <span>Импорт данных</span>
-                        </el-menu-item>
-                        <el-menu-item index="/export" v-if="currentUser.role === 'admin'">
-                            <i class="el-icon-download"></i>
-                            <span>Экспорт / Отчеты</span>
-                        </el-menu-item>
-                        <el-menu-item index="/users" v-if="currentUser.role === 'admin'">
-                            <i class="el-icon-setting"></i>
-                            <span>Пользователи</span>
-                        </el-menu-item>
-                    </el-menu>
-                </el-aside>
-
-                <!-- Основной контент -->
-                <el-main v-if="currentUser">
-                    <!-- Форма входа (если не авторизован) -->
-                    <login-form v-if="!currentUser" @login-success="onLogin"></login-form>
-
-                    <!-- Страницы -->
-                    <dashboard-page v-if="currentRoute === '/'"></dashboard-page>
-                    <schedule-page v-if="currentRoute === '/schedule'"></schedule-page>
-                    <classrooms-page v-if="currentRoute === '/classrooms'"></classrooms-page>
-                    <teachers-page v-if="currentRoute === '/teachers'"></teachers-page>
-                    <software-page v-if="currentRoute === '/software'"></software-page>
-                    <import-page v-if="currentRoute === '/import'"></import-page>
-                    <export-page v-if="currentRoute === '/export'"></export-page>
-                    <users-page v-if="currentRoute === '/users'"></users-page>
-                </el-main>
-
-                <!-- Форма входа в центре -->
-                <el-main v-else class="login-centered">
-                    <login-form @login-success="onLogin"></login-form>
-                </el-main>
-            </el-container>
-        </el-container>
+<div id="app">
+    <header class="header">
+        <h2>Учебный отдел ВШПМ СПбГУПТД</h2>
+        <div id="header-right"></div>
+    </header>
+    <div class="layout">
+        <aside class="aside" id="aside"></aside>
+        <main class="main" id="main"></main>
     </div>
+</div>
+<script>
+// ====== API client ======
+const API = {
+    base: '/api',
+    async req(method, url, data = null) {
+        const opts = {method, headers: {'Content-Type':'application/json'}};
+        if (data && method !== 'GET') opts.body = JSON.stringify(data);
+        const r = await fetch(this.base + url, opts);
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error || 'Ошибка сервера');
+        return json;
+    },
+    login(u, p) {return this.req('POST','/auth/login',{username:u,password:p});},
+    logout() {return this.req('POST','/auth/logout');},
+    getMe() {return this.req('GET','/auth/me');},
+    // teachers
+    getTeachers(p) {return this.req('GET','/teachers'+(p?p:''));},
+    createTeacher(d) {return this.req('POST','/teachers',d);},
+    updateTeacher(id,d) {return this.req('PUT','/teachers/'+id,d);},
+    deleteTeacher(id) {return this.req('DELETE','/teachers/'+id);},
+    // classrooms
+    getClassrooms() {return this.req('GET','/classrooms');},
+    createClassroom(d) {return this.req('POST','/classrooms',d);},
+    updateClassroom(id,d) {return this.req('PUT','/classrooms/'+id,d);},
+    deleteClassroom(id) {return this.req('DELETE','/classrooms/'+id);},
+    searchClassrooms(q) {return this.req('GET','/classrooms/search?q='+encodeURIComponent(q));},
+    getFreeClassrooms(d,p) {return this.req('GET','/classrooms/free?date='+d+'&pair='+p);},
+    // schedule
+    getSchedule(p) {return this.req('GET','/schedule'+(p||''));},
+    createSchedule(d) {return this.req('POST','/schedule',d);},
+    updateSchedule(id,d) {return this.req('PUT','/schedule/'+id,d);},
+    deleteSchedule(id) {return this.req('DELETE','/schedule/'+id);},
+    // software
+    getSoftware() {return this.req('GET','/software');},
+    createSoftware(d) {return this.req('POST','/software',d);},
+    updateSoftware(id,d) {return this.req('PUT','/software/'+id,d);},
+    deleteSoftware(id) {return this.req('DELETE','/software/'+id);},
+    // users
+    getUsers() {return this.req('GET','/users');},
+    createUser(d) {return this.req('POST','/users',d);},
+    updateUser(id,d) {return this.req('PUT','/users/'+id,d);},
+    deleteUser(id) {return this.req('DELETE','/users/'+id);},
+    // import/export
+    importData(fd) {return fetch(this.base+'/import',{method:'POST',body:fd});},
+    exportData(t) {return this.base+'/export?type='+t;},
+};
 
-    <script src="https://unpkg.com/vue@2.7.14/dist/vue.js"></script>
-    <script src="https://unpkg.com/element-ui@2.15.14/lib/index.js"></script>
-    <script src="https://unpkg.com/axios@0.27.2/dist/axios.min.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/app.js"></script>
+let currentUser = null;
+let currentRoute = '/';
+const $headerRight = document.getElementById('header-right');
+const $aside = document.getElementById('aside');
+const $main = document.getElementById('main');
+
+// ====== ROUTER ======
+function navigate(route) {
+    currentRoute = route;
+    window.location.hash = route;
+    render();
+}
+window.onhashchange = () => { currentRoute = window.location.hash.slice(1)||'/'; render(); };
+
+// ====== RENDER ======
+async function render() {
+    if (!currentUser) {
+        $headerRight.innerHTML = '';
+        $aside.innerHTML = '';
+        $main.innerHTML = renderLogin();
+        document.querySelector('.layout').style.display = 'flex';
+        return;
+    }
+    $headerRight.innerHTML = `<span class="user-info">${esc(currentUser.full_name||currentUser.username)} (${currentUser.role==='admin'?'Администратор':'Пользователь'})</span><button class="danger" onclick="doLogout()">Выйти</button>`;
+    const menu = [
+        ['/', '🏠', 'Главная'],
+        ['/teachers', '👤', 'Преподаватели'],
+        ['/classrooms', '🏫', 'Аудитории'],
+        ['/schedule', '📅', 'Расписание'],
+        ['/software', '💻', 'Программное обеспечение'],
+    ];
+    if (currentUser.role === 'admin') {
+        menu.push(['/import', '📥', 'Импорт данных'], ['/export', '📤', 'Экспорт / Отчеты'], ['/users', '⚙️', 'Пользователи']);
+    }
+    $aside.innerHTML = menu.map(([r, i, l]) => `<a href="#${r}" class="${currentRoute===r?'active':''}" onclick="navigate('${r}');return false">${i} ${l}</a>`).join('');
+    switch(currentRoute) {
+        case '/': $main.innerHTML = await renderDashboard(); break;
+        case '/teachers': $main.innerHTML = await renderTeachers(); break;
+        case '/classrooms': $main.innerHTML = await renderClassrooms(); break;
+        case '/schedule': $main.innerHTML = await renderSchedule(); break;
+        case '/software': $main.innerHTML = await renderSoftware(); break;
+        case '/import': $main.innerHTML = renderImport(); break;
+        case '/export': $main.innerHTML = renderExport(); break;
+        case '/users': $main.innerHTML = await renderUsers(); break;
+        default: $main.innerHTML = '<div class="card"><h3>Страница не найдена</h3></div>';
+    }
+    bindEvents();
+}
+
+function esc(s) {return (s||'').replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');}
+
+// ====== LOGIN ======
+function renderLogin() {
+    return `<div class="login-box">
+        <h3>Вход в систему</h3>
+        <div class="form-group"><label>Логин</label><input id="login-username" placeholder="Введите логин"></div>
+        <div class="form-group"><label>Пароль</label><input id="login-password" type="password" placeholder="Введите пароль"></div>
+        <div id="login-error"></div>
+        <div class="form-actions"><button class="primary" id="login-btn" style="width:100%">Войти</button></div>
+    </div>`;
+}
+
+async function doLogin() {
+    const u = document.getElementById('login-username').value;
+    const p = document.getElementById('login-password').value;
+    const err = document.getElementById('login-error');
+    const btn = document.getElementById('login-btn');
+    if (!u || !p) {err.innerHTML = '<div class="alert alert-error">Заполните все поля</div>'; return;}
+    btn.disabled = true; btn.textContent = 'Вход...';
+    try {
+        await API.login(u,p);
+        await checkAuth();
+    } catch(e) {
+        err.innerHTML = '<div class="alert alert-error">'+esc(e.message)+'</div>';
+    }
+    btn.disabled = false; btn.textContent = 'Войти';
+}
+
+async function doLogout() {
+    try {await API.logout();}catch(e){}
+    currentUser = null;
+    navigate('/');
+}
+
+async function checkAuth() {
+    try {const r = await API.getMe(); if(r.data&&r.data.id)currentUser=r.data;}catch(e){currentUser=null;}
+    render();
+}
+
+// ====== DASHBOARD ======
+async function renderDashboard() {
+    let teachers=0, classrooms=0, schedule=0;
+    try {const t=await API.getTeachers(); teachers=t.data?t.data.length:0;}catch(e){}
+    try {const c=await API.getClassrooms(); classrooms=c.data?c.data.length:0;}catch(e){}
+    return `<div>
+        <div class="stat-cards">
+            <div class="stat-card"><div class="num">${teachers}</div><div class="label">Преподавателей</div></div>
+            <div class="stat-card"><div class="num">${classrooms}</div><div class="label">Аудиторий</div></div>
+            <div class="stat-card"><div class="num">5</div><div class="label">Таблиц БД</div></div>
+            <div class="stat-card"><div class="num">${currentUser.role==='admin'?'Админ':'Пользователь'}</div><div class="label">Уровень доступа</div></div>
+        </div>
+        <div class="card"><h3>Добро пожаловать</h3><p style="margin-top:8px">Система сбора и поиска данных для учебного отдела ВШПМ СПбГУПТД. Используйте меню слева для навигации.</p></div>
+    </div>`;
+}
+
+// ====== TEACHERS ======
+async function renderTeachers() {
+    let list = []; try {const r=await API.getTeachers(); list=r.data||[];}catch(e){}
+    const deps = ['ЖиМ СМИ','ГиСЭД','Графика','КиКТ','Реклама','ТПиПК','ТПП','ИиУС','ПОиУ'];
+    const empls = ['штатный','внешний совместитель','внутренний совместитель','ГПХ'];
+    const rows = list.map(t => `<tr>
+        <td>${esc(t.last_name)} ${esc(t.first_name)} ${esc(t.middle_name||'')}</td>
+        <td>${esc(t.department||'')}</td><td>${esc(t.position||'')}</td>
+        <td>${esc(t.employment_type||'')}</td><td>${esc(t.email||'')}</td>
+        <td><button class="outline" onclick="editTeacher(${t.id})">Ред</button> <button class="danger" onclick="delTeacher(${t.id})">Уд</button></td>
+    </tr>`).join('');
+    return `<div class="card">
+        <div class="card-header"><h3>Преподаватели</h3><button class="primary" onclick="showTeacherForm()">+ Добавить</button></div>
+        <div class="inline-form" id="teacher-filter">
+            <div><label>Поиск по ФИО</label><input placeholder="Фамилия, имя..." id="tf-name"></div>
+            <div><label>Кафедра</label><select id="tf-dep"><option value="">Все</option>${deps.map(d=>`<option>${d}</option>`).join('')}</select></div>
+            <div><label>Форма занятости</label><select id="tf-emp"><option value="">Все</option>${empls.map(e=>`<option>${e}</option>`).join('')}</select></div>
+            <div style="display:flex;align-items:flex-end"><button class="primary" onclick="filterTeachers()">Найти</button></div>
+        </div>
+        <div id="teacher-form"></div>
+        <table>${rows?`<thead><tr><th>ФИО</th><th>Кафедра</th><th>Должность</th><th>Занятость</th><th>Email</th><th style="width:120px">Действия</th></tr></thead><tbody>${rows}</tbody>`:'<div class="empty">Нет данных</div>'}</table>
+    </div>`;
+}
+
+function showTeacherForm(id=null) {
+    const f = document.getElementById('teacher-form');
+    const deps = ['ЖиМ СМИ','ГиСЭД','Графика','КиКТ','Реклама','ТПиПК','ТПП','ИиУС','ПОиУ'];
+    f.innerHTML = `<div class="card"><h4>${id?'Редактировать':'Добавить'} преподавателя</h4>
+        <div class="inline-form">
+            <div><label>Фамилия</label><input id="te-last"></div>
+            <div><label>Имя</label><input id="te-first"></div>
+            <div><label>Отчество</label><input id="te-middle"></div>
+            <div><label>Должность</label><input id="te-pos"></div>
+            <div><label>Степень</label><input id="te-deg"></div>
+            <div><label>Звание</label><input id="te-title"></div>
+            <div><label>Кафедра</label><select id="te-dep">${deps.map(d=>`<option>${d}</option>`).join('')}</select></div>
+            <div><label>Форма занятости</label><select id="te-emp"><option>штатный</option><option>внешний совместитель</option><option>внутренний совместитель</option><option>ГПХ</option></select></div>
+            <div><label>Email</label><input id="te-email" type="email"></div>
+            <div><label>Телефон</label><input id="te-phone"></div>
+            <div class="full"><label>Особые отметки</label><textarea id="te-notes"></textarea></div>
+        </div>
+        <div class="form-actions">
+            <button class="outline" onclick="document.getElementById('teacher-form').innerHTML=''">Отмена</button>
+            <button class="primary" id="save-teacher-btn">${id?'Обновить':'Создать'}</button>
+        </div>
+    </div>`;
+    if(id) {
+        document.getElementById('save-teacher-btn').onclick = ()=>saveTeacher(id);
+        // pre-fill? too much for now
+    } else {
+        document.getElementById('save-teacher-btn').onclick = ()=>saveTeacher();
+    }
+}
+
+async function saveTeacher(id=null) {
+    const data = {
+        last_name: document.getElementById('te-last').value,
+        first_name: document.getElementById('te-first').value,
+        middle_name: document.getElementById('te-middle').value,
+        position: document.getElementById('te-pos').value,
+        degree: document.getElementById('te-deg').value,
+        title: document.getElementById('te-title').value,
+        department: document.getElementById('te-dep').value,
+        employment_type: document.getElementById('te-emp').value,
+        email: document.getElementById('te-email').value,
+        phone: document.getElementById('te-phone').value,
+        notes: document.getElementById('te-notes').value,
+    };
+    try {
+        if(id) await API.updateTeacher(id,data); else await API.createTeacher(data);
+        render();
+    } catch(e) {alert(e.message);}
+}
+async function delTeacher(id) {if(confirm('Удалить?')){try{await API.deleteTeacher(id);render();}catch(e){alert(e.message);}}}
+async function editTeacher(id) {showTeacherForm(id);}
+async function filterTeachers() {
+    const n = document.getElementById('tf-name')?.value||'';
+    const d = document.getElementById('tf-dep')?.value||'';
+    const e = document.getElementById('tf-emp')?.value||'';
+    const p = new URLSearchParams();
+    if(n) p.set('search',n); if(d) p.set('department',d); if(e) p.set('employment_type',e);
+    try {const r=await API.getTeachers('?'+p.toString()); renderList(r.data||[],'teacher');}catch(e){}
+}
+
+// ====== CLASSROOMS ======
+async function renderClassrooms() {
+    let list = []; try {const r=await API.getClassrooms(); list=r.data||[];}catch(e){}
+    const rows = list.map(c => `<tr>
+        <td>${esc(c.room_number)}</td><td>${esc(c.building)}</td><td>${esc(c.room_type)}</td>
+        <td>${c.seats||0}</td><td>${c.has_projector?'✅':'—'}</td><td>${c.computers_count||0}</td>
+        <td><button class="outline" onclick="editClassroom(${c.id})">Ред</button> <button class="danger" onclick="delClassroom(${c.id})">Уд</button></td>
+    </tr>`).join('');
+    return `<div class="card">
+        <div class="card-header"><h3>Аудитории</h3><button class="primary" onclick="showClassroomForm()">+ Добавить</button></div>
+        <div class="inline-form">
+            <div><label>Поиск</label><input placeholder="Номер, корпус..." id="cf-q"></div>
+            <div style="display:flex;align-items:flex-end"><button class="primary" onclick="searchClassrooms()">Найти</button></div>
+        </div>
+        <div id="classroom-form"></div>
+        <table>${rows?`<thead><tr><th>Номер</th><th>Корпус</th><th>Тип</th><th>Мест</th><th>Проектор</th><th>Комп.</th><th style="width:120px">Действия</th></tr></thead><tbody>${rows}</tbody>`:'<div class="empty">Нет данных</div>'}</table>
+    </div>`;
+}
+
+function showClassroomForm(id=null) {
+    const f = document.getElementById('classroom-form');
+    f.innerHTML = `<div class="card"><h4>${id?'Редактировать':'Добавить'} аудиторию</h4>
+        <div class="inline-form">
+            <div><label>Номер</label><input id="cr-num"></div>
+            <div><label>Корпус</label><select id="cr-bld"><option>Д</option><option>В</option></select></div>
+            <div><label>Тип помещения</label><select id="cr-type"><option>компьютерный класс</option><option>лаборатория</option><option>лекционная аудитория</option></select></div>
+            <div><label>Посадочных мест</label><input id="cr-seats" type="number"></div>
+            <div><label>Проектор/ТВ</label><select id="cr-proj"><option value="0">Нет</option><option value="1">Да</option></select></div>
+            <div><label>Колонки</label><select id="cr-spk"><option value="0">Нет</option><option value="1">Да</option></select></div>
+            <div><label>Компьютеров</label><input id="cr-comp" type="number" value="0"></div>
+            <div class="full"><label>Установленное ПО</label><textarea id="cr-sw"></textarea></div>
+        </div>
+        <div class="form-actions">
+            <button class="outline" onclick="document.getElementById('classroom-form').innerHTML=''">Отмена</button>
+            <button class="primary" id="save-classroom-btn">${id?'Обновить':'Создать'}</button>
+        </div>
+    </div>`;
+    document.getElementById('save-classroom-btn').onclick = ()=>saveClassroom(id);
+}
+
+async function saveClassroom(id=null) {
+    const data = {
+        room_number: document.getElementById('cr-num').value,
+        building: document.getElementById('cr-bld').value,
+        room_type: document.getElementById('cr-type').value,
+        seats: parseInt(document.getElementById('cr-seats').value)||0,
+        has_projector: parseInt(document.getElementById('cr-proj').value),
+        has_speakers: parseInt(document.getElementById('cr-spk').value),
+        computers_count: parseInt(document.getElementById('cr-comp').value)||0,
+        software_installed: document.getElementById('cr-sw').value,
+    };
+    try {
+        if(id) await API.updateClassroom(id,data); else await API.createClassroom(data);
+        render();
+    } catch(e) {alert(e.message);}
+}
+async function delClassroom(id) {if(confirm('Удалить?')){try{await API.deleteClassroom(id);render();}catch(e){alert(e.message);}}}
+async function searchClassrooms() {
+    const q = document.getElementById('cf-q')?.value||'';
+    try {const r=await API.searchClassrooms(q); const l=r.data||[]; renderList(l,'classroom');}catch(e){alert(e.message);}
+}
+
+// ====== SCHEDULE ======
+async function renderSchedule() {
+    let list=[],classrooms=[],teachers=[];
+    try{const r=await API.getSchedule(); list=r.data||[];}catch(e){}
+    try{const r=await API.getClassrooms(); classrooms=r.data||[];}catch(e){}
+    try{const r=await API.getTeachers(); teachers=r.data||[];}catch(e){}
+    const rows = list.map(s => {
+        const cr = classrooms.find(c=>c.id===s.classroom_id);
+        const tr = teachers.find(t=>t.id===s.teacher_id);
+        const cs = s.transfer_cancel==='перенос'?'badge-warning':s.transfer_cancel==='отмена'?'badge-danger':'';
+        return `<tr style="${s.transfer_cancel==='отмена'?'background:#fff0f0':''}">
+            <td>${esc(s.date||'')}</td><td>${esc(cr?cr.room_number+' ('+cr.building+')':'—')}</td>
+            <td>${esc(tr?tr.last_name+' '+tr.first_name:'—')}</td>
+            <td>${s.pair_number||'-'}</td><td>${esc(s.lesson_type||'')}</td>
+            <td><span class="badge ${cs}">${esc(s.transfer_cancel||'нет')}</span></td>
+            <td><button class="outline" onclick="editSchedule(${s.id})">Ред</button> <button class="danger" onclick="delSchedule(${s.id})">Уд</button></td>
+        </tr>`;
+    }).join('');
+    return `<div class="card">
+        <div class="card-header"><h3>Расписание</h3><button class="primary" onclick="showScheduleForm()">+ Добавить</button></div>
+        <div class="inline-form">
+            <div><label>Дата</label><input type="date" id="sf-date" value="${new Date().toISOString().slice(0,10)}"></div>
+            <div><label>Номер пары</label><input type="number" id="sf-pair" value="1" min="1" max="8"></div>
+            <div style="display:flex;align-items:flex-end"><button class="primary" onclick="findFree()">Свободные аудитории</button></div>
+        </div>
+        <div id="free-result"></div>
+        <div id="schedule-form"></div>
+        <table>${rows?`<thead><tr><th>Дата</th><th>Аудитория</th><th>Преподаватель</th><th>Пара</th><th>Вид</th><th>Статус</th><th style="width:120px">Действия</th></tr></thead><tbody>${rows}</tbody>`:'<div class="empty">Нет данных</div>'}</table>
+    </div>`;
+}
+
+function showScheduleForm(id=null) {
+    const f = document.getElementById('schedule-form');
+    f.innerHTML = `<div class="card"><h4>${id?'Редактировать':'Добавить'} запись</h4>
+        <div class="inline-form">
+            <div><label>Аудитория ID</label><input id="sc-crid" type="number"></div>
+            <div><label>Преподаватель ID</label><input id="sc-tid" type="number"></div>
+            <div><label>Дата</label><input id="sc-date" type="date"></div>
+            <div><label>День недели</label><input id="sc-day"></div>
+            <div><label>Номер пары</label><input id="sc-pair" type="number" min="1" max="8"></div>
+            <div><label>Время (начало-конец)</label><input id="sc-time" placeholder="9:00-10:30"></div>
+            <div><label>Вид занятия</label><select id="sc-type"><option>лекц.</option><option>прак.</option><option>лаб.</option><option>конс.</option><option>экз.</option><option>ДО</option></select></div>
+            <div><label>Числитель/знаменатель</label><select id="sc-nd"><option>числитель</option><option>знаменатель</option></select></div>
+            <div><label>Статус</label><select id="sc-tc"><option>нет</option><option>перенос</option><option>отмена</option></select></div>
+        </div>
+        <div class="form-actions">
+            <button class="outline" onclick="document.getElementById('schedule-form').innerHTML=''">Отмена</button>
+            <button class="primary" id="save-schedule-btn">${id?'Обновить':'Создать'}</button>
+        </div>
+    </div>`;
+    document.getElementById('save-schedule-btn').onclick = ()=>saveSchedule(id);
+}
+
+async function saveSchedule(id=null) {
+    const data = {
+        classroom_id: parseInt(document.getElementById('sc-crid').value),
+        teacher_id: parseInt(document.getElementById('sc-tid').value)||null,
+        date: document.getElementById('sc-date').value,
+        day_of_week: document.getElementById('sc-day').value,
+        pair_number: parseInt(document.getElementById('sc-pair').value),
+        time_start: document.getElementById('sc-time').value.split('-')[0]||null,
+        time_end: document.getElementById('sc-time').value.split('-')[1]||null,
+        lesson_type: document.getElementById('sc-type').value,
+        numerator_denominator: document.getElementById('sc-nd').value,
+        transfer_cancel: document.getElementById('sc-tc').value,
+        is_occupied: 1,
+    };
+    try {
+        if(id) await API.updateSchedule(id,data); else await API.createSchedule(data);
+        render();
+    } catch(e) {alert(e.message);}
+}
+async function delSchedule(id) {if(confirm('Удалить?')){try{await API.deleteSchedule(id);render();}catch(e){alert(e.message);}}}
+async function findFree() {
+    const d = document.getElementById('sf-date')?.value||'';
+    const p = document.getElementById('sf-pair')?.value||'1';
+    try {
+        const r = await API.getFreeClassrooms(d,p);
+        const list = (r.data||[]).map(c => `Ауд. ${c.room_number} (${c.building}) — ${c.room_type}, мест: ${c.seats}`).join('<br>');
+        document.getElementById('free-result').innerHTML = `<div class="card"><h4>Свободные аудитории (${d}, пара ${p})</h4><p>${list||'Нет свободных'}</p></div>`;
+    } catch(e) {alert(e.message);}
+}
+
+// ====== SOFTWARE ======
+async function renderSoftware() {
+    let list = []; try {const r=await API.getSoftware(); list=r.data||[];}catch(e){}
+    const rows = list.map(s => `<tr>
+        <td>${esc(s.room_number||'')}</td><td>${esc(s.building||'')}</td><td>${esc(s.name)}</td>
+        <td>${esc(s.notes||'')}</td>
+        <td><button class="outline" onclick="editSoftware(${s.id})">Ред</button> <button class="danger" onclick="delSoftware(${s.id})">Уд</button></td>
+    </tr>`).join('');
+    return `<div class="card">
+        <div class="card-header"><h3>Программное обеспечение</h3><button class="primary" onclick="showSoftwareForm()">+ Добавить</button></div>
+        <div id="software-form"></div>
+        <table>${rows?`<thead><tr><th>Аудитория</th><th>Корпус</th><th>ПО</th><th>Примечания</th><th style="width:120px">Действия</th></tr></thead><tbody>${rows}</tbody>`:'<div class="empty">Нет данных</div>'}</table>
+    </div>`;
+}
+
+function showSoftwareForm(id=null) {
+    const f = document.getElementById('software-form');
+    f.innerHTML = `<div class="card"><h4>${id?'Редактировать':'Добавить'} ПО</h4>
+        <div class="inline-form">
+            <div><label>Номер аудитории</label><input id="sw-room"></div>
+            <div><label>Корпус</label><select id="sw-bld"><option>Д</option><option>В</option></select></div>
+            <div class="full"><label>Наименование ПО</label><input id="sw-name"></div>
+            <div class="full"><label>Особые отметки</label><textarea id="sw-notes"></textarea></div>
+        </div>
+        <div class="form-actions">
+            <button class="outline" onclick="document.getElementById('software-form').innerHTML=''">Отмена</button>
+            <button class="primary" id="save-software-btn">${id?'Обновить':'Создать'}</button>
+        </div>
+    </div>`;
+    document.getElementById('save-software-btn').onclick = ()=>saveSoftware(id);
+}
+
+async function saveSoftware(id=null) {
+    const data = {
+        room_number: document.getElementById('sw-room').value,
+        building: document.getElementById('sw-bld').value,
+        name: document.getElementById('sw-name').value,
+        notes: document.getElementById('sw-notes').value,
+    };
+    try {
+        if(id) await API.updateSoftware(id,data); else await API.createSoftware(data);
+        render();
+    } catch(e) {alert(e.message);}
+}
+async function delSoftware(id) {if(confirm('Удалить?')){try{await API.deleteSoftware(id);render();}catch(e){alert(e.message);}}}
+
+// ====== IMPORT ======
+function renderImport() {
+    return `<div class="card">
+        <div class="card-header"><h3>Импорт данных из Excel</h3></div>
+        <div class="inline-form">
+            <div><label>Тип данных</label><select id="imp-type"><option>teachers</option><option>schedule</option><option>classrooms</option><option>software</option></select></div>
+            <div class="full"><label>Файл (.xlsx, .xls)</label><input type="file" id="imp-file" accept=".xlsx,.xls"></div>
+        </div>
+        <div class="form-actions"><button class="primary" onclick="doImport()">Загрузить</button></div>
+        <div id="import-result"></div>
+    </div>`;
+}
+async function doImport() {
+    const file = document.getElementById('imp-file')?.files[0];
+    const type = document.getElementById('imp-type')?.value;
+    const res = document.getElementById('import-result');
+    if(!file){res.innerHTML='<div class="alert alert-error">Выберите файл</div>';return;}
+    const fd = new FormData(); fd.append('file',file); fd.append('type',type);
+    try {
+        const r = await API.importData(fd);
+        const j = await r.json();
+        res.innerHTML = `<div class="alert alert-success">${j.message||'Импорт выполнен'}</div>`;
+    } catch(e) {res.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;}
+}
+
+// ====== EXPORT ======
+function renderExport() {
+    return `<div class="card">
+        <div class="card-header"><h3>Экспорт данных / Отчеты</h3></div>
+        <p>Выберите раздел для экспорта в Excel:</p>
+        <div class="form-actions" style="margin-top:16px">
+            <button class="primary" onclick="window.open(API.exportData('teachers'),'_blank')">Преподаватели</button>
+            <button class="primary" onclick="window.open(API.exportData('schedule'),'_blank')">Расписание</button>
+            <button class="primary" onclick="window.open(API.exportData('classrooms'),'_blank')">Аудитории</button>
+            <button class="primary" onclick="window.open(API.exportData('software'),'_blank')">ПО</button>
+        </div>
+    </div>`;
+}
+
+// ====== USERS ======
+async function renderUsers() {
+    let list = []; try {const r=await API.getUsers(); list=r.data||[];}catch(e){}
+    const rows = list.map(u => `<tr>
+        <td>${esc(u.username)}</td><td>${esc(u.full_name||'')}</td>
+        <td><span class="badge ${u.role==='admin'?'badge-info':'badge-success'}">${u.role==='admin'?'Администратор':'Пользователь'}</span></td>
+        <td><button class="outline" onclick="editUser(${u.id})">Ред</button> <button class="danger" onclick="delUser(${u.id})">Уд</button></td>
+    </tr>`).join('');
+    return `<div class="card">
+        <div class="card-header"><h3>Пользователи</h3><button class="primary" onclick="showUserForm()">+ Добавить</button></div>
+        <div id="user-form"></div>
+        <table>${rows?`<thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th style="width:120px">Действия</th></tr></thead><tbody>${rows}</tbody>`:'<div class="empty">Нет данных</div>'}</table>
+    </div>`;
+}
+
+function showUserForm(id=null) {
+    const f = document.getElementById('user-form');
+    f.innerHTML = `<div class="card"><h4>${id?'Редактировать':'Добавить'} пользователя</h4>
+        <div class="inline-form">
+            <div><label>Логин</label><input id="us-name"></div>
+            <div><label>Пароль</label><input id="us-pass" type="password" placeholder="${id?'Оставьте пустым':'Введите пароль'}"></div>
+            <div><label>ФИО</label><input id="us-full"></div>
+            <div><label>Роль</label><select id="us-role"><option>user</option><option>admin</option></select></div>
+        </div>
+        <div class="form-actions">
+            <button class="outline" onclick="document.getElementById('user-form').innerHTML=''">Отмена</button>
+            <button class="primary" id="save-user-btn">${id?'Обновить':'Создать'}</button>
+        </div>
+    </div>`;
+    document.getElementById('save-user-btn').onclick = ()=>saveUser(id);
+}
+
+async function saveUser(id=null) {
+    const data = {
+        username: document.getElementById('us-name').value,
+        full_name: document.getElementById('us-full').value,
+        role: document.getElementById('us-role').value,
+    };
+    const pass = document.getElementById('us-pass').value;
+    if(pass) data.password = pass;
+    try {
+        if(id) await API.updateUser(id,data); else await API.createUser(data);
+        render();
+    } catch(e) {alert(e.message);}
+}
+async function delUser(id) {if(confirm('Удалить?')){try{await API.deleteUser(id);render();}catch(e){alert(e.message);}}}
+
+// ====== EVENT BINDING ======
+function bindEvents() {
+    const lb = document.getElementById('login-btn');
+    if (lb) lb.onclick = doLogin;
+    const lp = document.getElementById('login-password');
+    if (lp && !currentUser) lp.onkeydown = (e) => {if(e.key==='Enter') doLogin();};
+}
+
+// ====== INIT ======
+currentRoute = window.location.hash.slice(1) || '/';
+(async function() {
+    try {const r=await API.getMe(); if(r.data&&r.data.id)currentUser=r.data;}catch(e){}
+    render();
+})();
+</script>
 </body>
 </html>
