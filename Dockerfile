@@ -10,7 +10,11 @@ RUN apt-get update && apt-get install -y --allow-unauthenticated \
     unzip \
     git \
     libzip-dev \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-install pdo pdo_mysql mbstring zip gd \
     && a2enmod rewrite \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
