@@ -88,21 +88,21 @@ foreach ($expectedColumns as $table => $cols) {
 // ===== Проверка ENUM значений =====
 echo "\n--- ENUM валидация ---\n";
 
-test("ENUM 'building' в classrooms", function () {
+test("Тип колонки 'building' в classrooms", function () {
     $pdo = getDB();
     $stmt = $pdo->query("SHOW COLUMNS FROM classrooms LIKE 'building'");
     $col = $stmt->fetch();
-    if (strpos($col['Type'], "'Д','В'") === false) {
-        throw new Exception("Неверные значения ENUM 'building'");
+    if ($col['Type'] !== 'varchar(5)') {
+        throw new Exception("Тип {$col['Type']}, ожидался varchar(5)");
     }
 });
 
-test("ENUM 'department' в teachers", function () {
+test("Тип колонки 'department' в teachers", function () {
     $pdo = getDB();
     $stmt = $pdo->query("SHOW COLUMNS FROM teachers LIKE 'department'");
     $col = $stmt->fetch();
-    if (strpos($col['Type'], 'ЖиМ СМИ') === false) {
-        throw new Exception("Неверные значения ENUM 'department'");
+    if ($col['Type'] !== 'varchar(100)') {
+        throw new Exception("Тип {$col['Type']}, ожидался varchar(100)");
     }
 });
 
