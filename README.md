@@ -162,7 +162,7 @@
 **Требования:** Docker и Docker Compose.
 
 ```bash
-git clone https://github.com/amper24/HSPM-App.git && cd HSPM-App/app && chmod +x setup.sh && ./setup.sh
+git clone https://github.com/amper24/HSPM-App.git && cd HSPM-App && chmod +x setup.sh && ./setup.sh
 ```
 
 Скрипт `setup.sh` выполнит:

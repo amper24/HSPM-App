@@ -2,11 +2,11 @@
 Прил_Уч_отдел - задание/
 
 # Зависимости
-app/vendor/
+vendor/
 
 # Загруженные и экспортированные файлы
-app/uploads/
-app/exports/
+uploads/
+exports/
 
 # Системные файлы
 .DS_Store
