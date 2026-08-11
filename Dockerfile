@@ -1,7 +1,12 @@
 FROM php:7.2.34-apache
 
+# Переключение репозиториев на archive.debian.org (buster is EOL)
+RUN echo "deb http://archive.debian.org/debian buster main" > /etc/apt/sources.list \
+    && echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list \
+    && echo "deb http://archive.debian.org/debian buster-updates main" >> /etc/apt/sources.list
+
 # Установка системных зависимостей
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --allow-unauthenticated \
     unzip \
     git \
     libzip-dev \
@@ -24,7 +29,7 @@ RUN mkdir -p /var/www/html/uploads /var/www/html/exports \
 
 # Установка PHP-зависимостей
 WORKDIR /var/www/html
-RUN composer install --no-interaction --optimize-autoloader
+RUN composer install --no-interaction --optimize-autoloader --ignore-platform-req=php
 
 # Apache конфигурация
 RUN echo '<Directory /var/www/html>\n\
