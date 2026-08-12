@@ -67,7 +67,9 @@ CREATE TABLE `teachers` (
 -- Расписание занятий (зависит от classrooms и teachers)
 CREATE TABLE `schedule` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
+  `dedup_key` VARCHAR(64) NOT NULL COMMENT 'Уникальный ключ записи для защиты от дублей',
   `classroom_id` INT(11) DEFAULT NULL,
+  `classrooms_raw` VARCHAR(255) DEFAULT NULL COMMENT 'Исходная строка аудиторий (ДО / Д234, Д237 / Д234)',
   `teacher_id` INT(11) DEFAULT NULL,
   `numerator_denominator` VARCHAR(20) DEFAULT NULL COMMENT 'Числитель/знаменатель',
   `date` DATE DEFAULT NULL COMMENT 'Дата занятия',
@@ -96,7 +98,7 @@ CREATE TABLE `schedule` (
   KEY `idx_date` (`date`),
   KEY `idx_transfer_cancel` (`transfer_cancel`),
   KEY `idx_is_occupied` (`is_occupied`),
-  UNIQUE KEY `idx_unique_schedule` (`classroom_id`, `date`, `pair_number`, `time_start`),
+   UNIQUE KEY `idx_unique_schedule_dedup` (`dedup_key`),
   CONSTRAINT `fk_schedule_classroom` FOREIGN KEY (`classroom_id`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_schedule_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -116,4 +118,16 @@ CREATE TABLE `software` (
   KEY `idx_building` (`building`),
   UNIQUE KEY `idx_unique_software` (`room_number`, `building`, `name`),
   CONSTRAINT `fk_software_classroom` FOREIGN KEY (`classroom_id`) REFERENCES `classrooms` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Связь расписания с несколькими аудиториями (many-to-many)
+CREATE TABLE `schedule_classrooms` (
+  `id` INT(11) NOT NULL AUTO_INCREMENT,
+  `schedule_id` INT(11) NOT NULL,
+  `classroom_id` INT(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_sched_classroom` (`schedule_id`, `classroom_id`),
+  KEY `idx_classroom` (`classroom_id`),
+  CONSTRAINT `fk_sc_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `schedule` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_sc_classroom` FOREIGN KEY (`classroom_id`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

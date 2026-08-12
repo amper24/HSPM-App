@@ -21,6 +21,7 @@ function handleImport(string $method, string $action): void {
     if (empty($_FILES['file'])) jsonError('Файл не загружен');
 
     $type = $_POST['type'] ?? 'teachers';
+    $createMissing = !empty($_POST['create_missing']);
     $file = $_FILES['file']['tmp_name'];
     $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
 
@@ -37,14 +38,15 @@ function handleImport(string $method, string $action): void {
         jsonError("Несовпадение типа файла. Вы выбрали «{$type}», но файл содержит «{$detectedType}».", 400);
 
     $imported = 0;
+    $createdTeachers = 0;
     switch ($actualType) {
         case 'teachers': $imported = importTeachers($spreadsheet, $pdo); break;
         case 'classrooms': $imported = importClassrooms($spreadsheet, $pdo); break;
-        case 'schedule': $imported = importSchedule($spreadsheet, $pdo); break;
+        case 'schedule': $imported = importSchedule($spreadsheet, $pdo, $createMissing, $createdTeachers); break;
         case 'software': $imported = importSoftware($spreadsheet, $pdo); break;
         default: jsonError('Неизвестный тип импорта: ' . $type);
     }
-    jsonSuccess(['imported' => $imported], "Импортировано записей: {$imported}");
+    jsonSuccess(['imported' => $imported, 'created_teachers' => $createdTeachers], "Импортировано записей: {$imported}" . ($createdTeachers ? ", создано преподавателей: {$createdTeachers}" : ''));
 }
 
 // ====================== TEACHERS ======================
@@ -247,22 +249,24 @@ function importClassroomsSimple($sheet, PDO $pdo): int {
 
 // ====================== SCHEDULE ======================
 
-function importSchedule($spreadsheet, PDO $pdo): int {
+function importSchedule($spreadsheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+    $createdTeachers = $createdTeachers ?? 0;
     $sheet = $spreadsheet->getActiveSheet();
     
     // Всегда сначала пробуем авто-определение по заголовкам
-    $result = importScheduleByHeaders($sheet, $pdo);
+    $result = importScheduleByHeaders($sheet, $pdo, $createMissing, $createdTeachers);
     if ($result > 0) return $result;
     
     // Фолбэк на старые фиксированные форматы
     $firstCell = trim((string)($sheet->getCell('A1')->getValue() ?? ''));
     if (mb_stripos($firstCell, 'экзамен') !== false) {
-        return importScheduleSession($sheet, $pdo);
+        return importScheduleSession($sheet, $pdo, $createMissing, $createdTeachers);
     }
-    return importScheduleRegular($sheet, $pdo);
+    return importScheduleRegular($sheet, $pdo, $createMissing, $createdTeachers);
 }
 
-function importScheduleByHeaders($sheet, PDO $pdo): int {
+function importScheduleByHeaders($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+    $createdTeachers = $createdTeachers ?? 0;
     $maxCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($sheet->getHighestColumn());
     $maxCol = min($maxCol, 30);
     
@@ -276,20 +280,8 @@ function importScheduleByHeaders($sheet, PDO $pdo): int {
             $h = mb_strtolower(trim((string)($sheet->getCell(colLetter($col) . $r)->getValue() ?? '')), 'UTF-8');
             if ($h === '') continue;
             
-            if (preg_match('/^(дат|date)/ui', $h)) $candidate[$col] = 'date';
-            elseif (preg_match('/^(врем|time)/ui', $h)) $candidate[$col] = 'time';
-            elseif (preg_match('/^(групп|group|шифр)/ui', $h)) $candidate[$col] = 'group_code';
-            elseif (preg_match('/^(дисц|discipl)/ui', $h)) $candidate[$col] = 'discipline';
-            elseif (preg_match('/^(вид|тип|экз|exam.*type|экз.*тип)/ui', $h)) $candidate[$col] = 'exam_type';
-            elseif (preg_match('/^(экзамен|examiner|препод)/ui', $h)) $candidate[$col] = 'examiner';
-            elseif (preg_match('/^(ауд|room|classroom|каб)/ui', $h)) $candidate[$col] = 'classroom';
-            elseif (preg_match('/^(перенос|transfer|отмен)/ui', $h)) $candidate[$col] = 'transfer_cancel';
-            elseif (preg_match('/^(каф.*груп|group.*dep)/ui', $h)) $candidate[$col] = 'group_department';
-            elseif (preg_match('/^(каф.*преп|teacher.*dep)/ui', $h)) $candidate[$col] = 'teacher_department';
-            elseif (preg_match('/^(долж.*преп|teacher.*pos)/ui', $h)) $candidate[$col] = 'teacher_position';
-            elseif (preg_match('/^(сроки.*начало|сессия.*с|session.*start)/ui', $h)) $candidate[$col] = 'session_start';
-            elseif (preg_match('/^(сроки.*окончание|сессия.*по|session.*end)/ui', $h)) $candidate[$col] = 'session_end';
-            elseif (preg_match('/^кафедра/ui', $h) && !isset($candidate['group_department'])) $candidate[$col] = 'group_department';
+            $field = mapScheduleHeader($h);
+            if ($field !== null) $candidate[$col] = $field;
         }
         
         // Если нашли минимум 3 ключевых поля — считаем это строкой заголовков
@@ -302,15 +294,17 @@ function importScheduleByHeaders($sheet, PDO $pdo): int {
     
     if ($headerRow === 0) return 0; // не удалось определить заголовки
     
-    $checkStmt = $pdo->prepare("SELECT id FROM schedule WHERE date=:d AND time_start=:ts AND discipline=:disc AND examiner=:ex AND group_code=:gc LIMIT 1");
-    $stmt = $pdo->prepare("INSERT INTO schedule (classroom_id, teacher_id, numerator_denominator, date, pair_number, time_start, time_end, discipline, group_department, group_code, teacher_department, teacher_position, examiner, exam_type, session_start, session_end, lesson_type, is_occupied, transfer_cancel)
-        VALUES (:classroom_id, :teacher_id, :num_denom, :date, 1, :time_start, :time_end, :discipline, :group_department, :group_code, :teacher_department, :teacher_position, :examiner, :exam_type, :session_start, :session_end, :lesson_type, 1, :transfer)");
+    $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, classrooms_raw, teacher_id, numerator_denominator, date, pair_number, time_start, time_end, discipline, group_department, group_code, teacher_department, teacher_position, examiner, exam_type, session_start, session_end, lesson_type, is_occupied, transfer_cancel)
+        VALUES (:dedup_key, :classroom_id, :classrooms_raw, :teacher_id, :num_denom, :date, 1, :time_start, :time_end, :discipline, :group_department, :group_code, :teacher_department, :teacher_position, :examiner, :exam_type, :session_start, :session_end, :lesson_type, 1, :transfer)
+        ON DUPLICATE KEY UPDATE classroom_id=VALUES(classroom_id), classrooms_raw=VALUES(classrooms_raw), teacher_id=VALUES(teacher_id), time_end=VALUES(time_end), group_department=VALUES(group_department), teacher_department=VALUES(teacher_department), teacher_position=VALUES(teacher_position), exam_type=VALUES(exam_type), session_start=VALUES(session_start), session_end=VALUES(session_end), lesson_type=VALUES(lesson_type), transfer_cancel=VALUES(transfer_cancel)");
     
     $imported = 0;
+    $skipped = 0;
     for ($row = $headerRow + 1; $row <= $sheet->getHighestRow(); $row++) {
         $hasData = false;
         $rowData = [
-            'classroom_id' => null, 'teacher_id' => null, 'num_denom' => null,
+            'dedup_key' => null, 'classroom_id' => null, 'classrooms_raw' => null,
+            'teacher_id' => null, 'num_denom' => null,
             'date' => null, 'time_start' => null, 'time_end' => null,
             'discipline' => null, 'group_department' => null, 'group_code' => null,
             'teacher_department' => null, 'teacher_position' => null, 'examiner' => null,
@@ -333,7 +327,8 @@ function importScheduleByHeaders($sheet, PDO $pdo): int {
                 if ($roomRaw !== '') $hasData = true;
             } elseif ($field === 'transfer_cancel') {
                 $tv = mb_strtolower(trim((string)($val ?? '')), 'UTF-8');
-                if ($tv === 'перенос' || $tv === 'отмена') $rowData['transfer'] = 'перенос';
+                if ($tv === 'перенос') $rowData['transfer'] = 'перенос';
+                elseif ($tv === 'отмена') $rowData['transfer'] = 'отмена';
                 elseif ($tv !== '') $hasData = true;
             } elseif ($field === 'session_start' || $field === 'session_end') {
                 // Ячейки могут содержать несколько дат (например "22.12.2025 12.01.2026") — берем первую
@@ -351,13 +346,27 @@ function importScheduleByHeaders($sheet, PDO $pdo): int {
         if (!$hasData) continue;
         if (isAdminRow(($rowData['discipline'] ?? '') . ' ' . ($rowData['examiner'] ?? ''))) continue;
         
-        // Обработка аудитории
-        $classroomId = findClassroomByRoom($pdo, $roomRaw);
+        // Обработка аудиторий (ДО / одна / несколько)
+        $rows = parseClassrooms($roomRaw);
+        $rowData['classrooms_raw'] = $roomRaw !== '' ? $roomRaw : null;
+        $classroomId = null;
+        foreach ($rows as $rc) {
+            if ($rc['building'] !== null) {
+                ensureClassroom($pdo, $rc['room_number'], $rc['building']);
+                $classroomId = findClassroomByRoom($pdo, $rc['building'] . $rc['room_number']);
+                break;
+            }
+        }
         $rowData['classroom_id'] = $classroomId;
+        $rowData['dedup_key'] = scheduleDedupKey($rowData, $roomRaw);
         
-        // Поиск преподавателя по полному ФИО экзаменатора
+        // Поиск преподавателя по ФИО экзаменатора (создаем, если нет и разрешено)
         if (!empty($rowData['examiner'])) {
             $rowData['teacher_id'] = findTeacherByShortName($pdo, $rowData['examiner']);
+            if (!$rowData['teacher_id'] && $createMissing) {
+                $rowData['teacher_id'] = createTeacherFromName($pdo, $rowData['examiner'], $rowData['teacher_department'], $rowData['teacher_position']);
+                if ($rowData['teacher_id']) $createdTeachers++;
+            }
         }
         
         // Нормализация типа экзамена
@@ -367,29 +376,26 @@ function importScheduleByHeaders($sheet, PDO $pdo): int {
             elseif (mb_strpos($et, 'экз') !== false) $rowData['exam_type'] = 'экзамен';
         }
         
-        // Проверка на дубликат
-        if ($rowData['date'] && $rowData['time_start']) {
-            $checkStmt->execute([
-                'd' => $rowData['date'], 
-                'ts' => $rowData['time_start'], 
-                'disc' => $rowData['discipline'] ?? '', 
-                'ex' => $rowData['examiner'] ?? '', 
-                'gc' => $rowData['group_code'] ?? ''
-            ]);
-            if ($checkStmt->fetch()) continue;
-        }
-        
+        // INSERT с ON DUPLICATE KEY UPDATE — атомарная защита от дублирования
         $stmt->execute($rowData);
-        $imported++;
+        if ($stmt->rowCount() >= 1) $imported++;
+        else $skipped++;
+
+        $sidRes = $pdo->prepare("SELECT id FROM schedule WHERE dedup_key = :dk LIMIT 1");
+        $sidRes->execute(['dk' => $rowData['dedup_key']]);
+        $scheduleId = (int)$sidRes->fetchColumn();
+        saveScheduleClassrooms($pdo, $scheduleId, $rows);
     }
     
     return $imported;
 }
 
-function importScheduleSession($sheet, PDO $pdo): int {
-    $checkStmt = $pdo->prepare("SELECT id FROM schedule WHERE date=:d AND time_start=:ts AND discipline=:disc AND examiner=:ex AND group_code=:gc LIMIT 1");
-    $stmt = $pdo->prepare("INSERT INTO schedule (classroom_id, teacher_id, numerator_denominator, date, pair_number, time_start, time_end, discipline, group_department, group_code, teacher_department, teacher_position, examiner, exam_type, session_start, session_end, lesson_type, is_occupied, transfer_cancel)
-        VALUES (:classroom_id, :teacher_id, :num_denom, :date, 1, :time_start, :time_end, :discipline, :group_department, :group_code, :teacher_department, :teacher_position, :examiner, :exam_type, :session_start, :session_end, :lesson_type, 1, :transfer)");
+function importScheduleSession($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+    $createdTeachers = $createdTeachers ?? 0;
+    // INSERT ... ON DUPLICATE KEY UPDATE — атомарная защита от дублирования
+    $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, teacher_id, numerator_denominator, date, pair_number, time_start, time_end, discipline, group_department, group_code, teacher_department, teacher_position, examiner, exam_type, session_start, session_end, lesson_type, is_occupied, transfer_cancel)
+        VALUES (:dedup_key, :classroom_id, :teacher_id, :num_denom, :date, 1, :time_start, :time_end, :discipline, :group_department, :group_code, :teacher_department, :teacher_position, :examiner, :exam_type, :session_start, :session_end, :lesson_type, 1, :transfer)
+        ON DUPLICATE KEY UPDATE classroom_id=VALUES(classroom_id), teacher_id=VALUES(teacher_id), time_end=VALUES(time_end), group_department=VALUES(group_department), teacher_department=VALUES(teacher_department), teacher_position=VALUES(teacher_position), exam_type=VALUES(exam_type), session_start=VALUES(session_start), session_end=VALUES(session_end), lesson_type=VALUES(lesson_type), transfer_cancel=VALUES(transfer_cancel)");
 
     $imported = 0;
     for ($row = 5; $row <= $sheet->getHighestRow(); $row++) {
@@ -417,12 +423,18 @@ function importScheduleSession($sheet, PDO $pdo): int {
         $examType = mb_stripos($examTypeRaw, 'конс') !== false ? 'консультация' : (mb_stripos($examTypeRaw, 'экз') !== false ? 'экзамен' : ($examTypeRaw !== '' ? $examTypeRaw : null));
         $classroomId = findClassroomByRoom($pdo, $roomRaw);
         $teacherId = findTeacherByShortName($pdo, $examiner);
+        if (!$teacherId && $examiner !== '' && $createMissing) {
+            $teacherId = createTeacherFromName($pdo, $examiner, $teacherDep, $teacherPos);
+            if ($teacherId) $createdTeachers++;
+        }
 
-        // Проверка на дубликат
-        $checkStmt->execute(['d' => $date, 'ts' => $timeStart, 'disc' => $discipline, 'ex' => $examiner, 'gc' => $groupCode]);
-        if ($checkStmt->fetch()) continue;
+        $dedupKey = scheduleDedupKey([
+            'date' => $date, 'time_start' => $timeStart, 'discipline' => $discipline,
+            'group_code' => $groupCode, 'examiner' => $examiner,
+        ], $roomRaw);
 
         $stmt->execute([
+            'dedup_key'      => $dedupKey,
             'classroom_id'   => $classroomId,
             'teacher_id'     => $teacherId,
             'num_denom'      => null,
@@ -440,12 +452,13 @@ function importScheduleSession($sheet, PDO $pdo): int {
             'lesson_type'    => null,
             'transfer'       => 'нет',
         ]);
-        $imported++;
+        $imported += ($stmt->rowCount() >= 1) ? 1 : 0;
     }
     return $imported;
 }
 
-function importScheduleRegular($sheet, PDO $pdo): int {
+function importScheduleRegular($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+    $createdTeachers = $createdTeachers ?? 0;
     // Определяем RichText-формат
     $richTextCount = 0;
     $maxR = min($sheet->getHighestRow(), 10);
@@ -457,14 +470,15 @@ function importScheduleRegular($sheet, PDO $pdo): int {
         }
     }
     if ($richTextCount > 3) {
-        return importScheduleRichText($sheet, $pdo);
+        return importScheduleRichText($sheet, $pdo, $createMissing, $createdTeachers);
     }
-    return importScheduleSimple($sheet, $pdo);
+    return importScheduleSimple($sheet, $pdo, $createMissing, $createdTeachers);
 }
 
-function importScheduleSimple($sheet, PDO $pdo): int {
-    $stmt = $pdo->prepare("INSERT INTO schedule (classroom_id, teacher_id, date, pair_number, time_start, time_end, lesson_type, is_occupied)
-        VALUES (:classroom_id, :teacher_id, :date, 1, :time_start, :time_end, :lesson_type, 1)
+function importScheduleSimple($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+    $createdTeachers = $createdTeachers ?? 0;
+    $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, teacher_id, date, pair_number, time_start, time_end, lesson_type, is_occupied)
+        VALUES (:dedup_key, :classroom_id, :teacher_id, :date, 1, :time_start, :time_end, :lesson_type, 1)
         ON DUPLICATE KEY UPDATE teacher_id=VALUES(teacher_id), lesson_type=VALUES(lesson_type)");
 
     $imported = 0;
@@ -488,9 +502,15 @@ function importScheduleSimple($sheet, PDO $pdo): int {
             if ($cid) { $classroomId = $cid; break; }
         }
 
+        $teacherId = findTeacherInText($pdo, $discipline);
+        $dedupKey = scheduleDedupKey([
+            'date' => $date, 'time_start' => $timeStart, 'classroom_id' => $classroomId,
+            'discipline' => $discipline,
+        ], '');
         $stmt->execute([
+            'dedup_key'    => $dedupKey,
             'classroom_id' => $classroomId,
-            'teacher_id'   => findTeacherInText($pdo, $discipline),
+            'teacher_id'   => $teacherId,
             'date'         => $date, 'time_start' => $timeStart, 'time_end' => $timeEnd,
             'lesson_type'  => $lessonType !== '' ? $lessonType : null,
         ]);
@@ -499,9 +519,10 @@ function importScheduleSimple($sheet, PDO $pdo): int {
     return $imported;
 }
 
-function importScheduleRichText($sheet, PDO $pdo): int {
-    $stmt = $pdo->prepare("INSERT INTO schedule (classroom_id, teacher_id, date, pair_number, time_start, time_end, lesson_type, is_occupied)
-        VALUES (:classroom_id, :teacher_id, :date, 1, :time_start, :time_end, :lesson_type, 1)
+function importScheduleRichText($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+    $createdTeachers = $createdTeachers ?? 0;
+    $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, teacher_id, date, pair_number, time_start, time_end, lesson_type, is_occupied)
+        VALUES (:dedup_key, :classroom_id, :teacher_id, :date, 1, :time_start, :time_end, :lesson_type, 1)
         ON DUPLICATE KEY UPDATE teacher_id=VALUES(teacher_id), lesson_type=VALUES(lesson_type)");
 
     $imported = 0;
@@ -534,9 +555,15 @@ function importScheduleRichText($sheet, PDO $pdo): int {
 
         if (trim($allText) === '') continue;
 
+        $teacherId = findTeacherInText($pdo, $allText);
+        $dedupKey = scheduleDedupKey([
+            'date' => null, 'time_start' => $timeStart, 'classroom_id' => $classroomId,
+            'discipline' => $allText,
+        ], '');
         $stmt->execute([
+            'dedup_key'    => $dedupKey,
             'classroom_id' => $classroomId,
-            'teacher_id'   => findTeacherInText($pdo, $allText),
+            'teacher_id'   => $teacherId,
             'date'         => null, 'time_start' => $timeStart, 'time_end' => $timeEnd,
             'lesson_type'  => extractLessonType($allText),
         ]);
@@ -575,6 +602,162 @@ function importSoftware($spreadsheet, PDO $pdo): int {
 
 // ====================== HELPERS ======================
 
+/**
+ * Разбирает строку аудиторий в список записей [['building','room_number'], ...].
+ * Поддерживает: «ДО», «Д234», «Д234 Д237», «Д234, Д237», «ДО/Д234».
+ * Возвращает массив массивов.
+ */
+function parseClassrooms(string $raw): array {
+    $raw = trim($raw);
+    if ($raw === '') return [];
+
+    // Разделяем по запятым, слешам, «или», пробелам
+    $tokens = preg_split('/[\s,\/;]+/u', $raw, -1, PREG_SPLIT_NO_EMPTY);
+    $rooms = [];
+    foreach ($tokens as $token) {
+        $token = trim($token);
+        if ($token === '' || mb_strtolower($token, 'UTF-8') === 'или') continue;
+
+        // «ДО» — дистанционное обучение (без аудитории)
+        if (mb_strtoupper($token, 'UTF-8') === 'ДО') {
+            $rooms[] = ['building' => null, 'room_number' => 'ДО'];
+            continue;
+        }
+
+        if (preg_match('/^([ВвДд])\s*(\d+)$/u', $token, $m)) {
+            $rooms[] = ['building' => mb_strtoupper($m[1], 'UTF-8'), 'room_number' => $m[2]];
+        } elseif (preg_match('/^(\d{2,4})$/', $token, $m)) {
+            $rooms[] = ['building' => 'Д', 'room_number' => $m[1]];
+        }
+    }
+    return $rooms;
+}
+
+/**
+ * Сохраняет связи расписания с аудиториями через таблицу schedule_classrooms.
+ */
+function saveScheduleClassrooms(PDO $pdo, int $scheduleId, array $rows): void {
+    if ($scheduleId <= 0) return;
+    $insert = $pdo->prepare("INSERT IGNORE INTO schedule_classrooms (schedule_id, classroom_id) VALUES (:sid, :cid)");
+    foreach ($rows as $rc) {
+        if ($rc['building'] === null) continue; // «ДО» — без аудитории
+        $cid = findClassroomByRoom($pdo, $rc['building'] . $rc['room_number']);
+        if ($cid) $insert->execute(['sid' => $scheduleId, 'cid' => $cid]);
+    }
+}
+
+/**
+ * Сопоставляет заголовок колонки Excel с полем расписания.
+ * Порядок важен: «Экзаменатор» должен распознаваться раньше «экз»/«экзамен».
+ */
+function mapScheduleHeader(string $header): ?string {
+    $h = mb_strtolower(trim($header), 'UTF-8');
+    if ($h === '') return null;
+
+    if (preg_match('/^(дат|date)/ui', $h)) return 'date';
+    if (preg_match('/^(врем|time)/ui', $h)) return 'time';
+    if (preg_match('/^(групп|group|шифр)/ui', $h)) return 'group_code';
+    if (preg_match('/^(дисц|discipl)/ui', $h)) return 'discipline';
+    // Экзаменатор/преподаватель — раньше exam_type
+    if (preg_match('/^(экзаменатор|преподаватель|препод|examiner|фио)/ui', $h)) return 'examiner';
+    if (preg_match('/^(тип.*зан|вид.*зан|lesson.*type)/ui', $h)) return 'lesson_type';
+    if (preg_match('/^(консульта|зачет|зачёт|экз|экзамен|вид|тип|exam)/ui', $h)) return 'exam_type';
+    if (preg_match('/^(ауд|room|classroom|каб)/ui', $h)) return 'classroom';
+    if (preg_match('/^(перенос|transfer|отмен)/ui', $h)) return 'transfer_cancel';
+    if (preg_match('/^(каф.*груп|group.*dep)/ui', $h)) return 'group_department';
+    if (preg_match('/^(каф.*преп|teacher.*dep)/ui', $h)) return 'teacher_department';
+    if (preg_match('/^(долж.*преп|teacher.*pos)/ui', $h)) return 'teacher_position';
+    if (preg_match('/^(сроки.*начало|сессия.*с|session.*start)/ui', $h)) return 'session_start';
+    if (preg_match('/^(сроки.*окончание|сессия.*по|session.*end)/ui', $h)) return 'session_end';
+    if (preg_match('/^кафедра/ui', $h)) return 'group_department';
+    return null;
+}
+
+/**
+ * Формирует стабильный уникальный ключ записи расписания.
+ * Используется для защиты от дублирования при повторном импорте.
+ */
+function scheduleDedupKey(array $row, string $roomRaw = ''): string {
+    $date = $row['date'] ?? null;
+    $time = $row['time_start'] ?? null;
+    $discipline = $row['discipline'] ?? null;
+    $groupCode = $row['group_code'] ?? null;
+    $examiner = $row['examiner'] ?? null;
+    $classroomId = $row['classroom_id'] ?? null;
+    $lessonType = $row['lesson_type'] ?? null;
+
+    // Для формата по заголовкам/сессионного — по дате+времени+дисциплине+группе+экзаменатору
+    $parts = [
+        $date ?: '',
+        $time ?: '',
+        trim((string)$discipline),
+        trim((string)$groupCode),
+        trim((string)$examiner),
+    ];
+    // Если ключевых полей мало (RichText/simple), добавляем аудиторию и тип
+    if (!trim(implode('', [$discipline, $groupCode, $examiner]))) {
+        $parts = [
+            $date ?: '',
+            $time ?: '',
+            trim((string)$lessonType),
+            $classroomId ? (string)$classroomId : trim($roomRaw),
+            trim((string)$discipline),
+        ];
+    }
+    return substr(md5(implode('|', $parts)), 0, 64);
+}
+
+/**
+ * Создает преподавателя из краткого ФИО экзаменатора и сведений из расписания.
+ * Возвращает id созданного/найденного преподавателя или null.
+ */
+function createTeacherFromName(PDO $pdo, string $shortName, ?string $department = null, ?string $position = null): ?int {
+    $shortName = trim($shortName);
+    if ($shortName === '') return null;
+
+    $parts = preg_split('/\s+/', $shortName);
+    $lastName = $parts[0] ?? '';
+    $firstInitial = isset($parts[1]) ? rtrim($parts[1], '.') : '';
+    $middleInitial = isset($parts[2]) ? rtrim($parts[2], '.') : '';
+
+    // Разделяем склеенные инициалы "Д.Д."
+    if ($firstInitial !== '' && $middleInitial === '' && preg_match('/^([А-ЯЁ])\.([А-ЯЁ])\.{0,1}$/ui', $firstInitial, $m)) {
+        $firstInitial = $m[1];
+        $middleInitial = $m[2];
+    }
+
+    if ($lastName === '') return null;
+
+    // Имя: расширяем инициал до заглушки-имени, т.к. полного имени в расписании нет
+    $first = $firstInitial !== '' ? ($firstInitial . '.') : '';
+    $middle = $middleInitial !== '' ? ($middleInitial . '.') : null;
+    $department = ($department !== null && $department !== '') ? $department : null;
+    $position = ($position !== null && $position !== '') ? $position : null;
+
+    // Ищем по фамилии + инициалам, чтобы не наплодить дублей
+    $existing = findTeacherByShortName($pdo, $shortName);
+    if ($existing) return $existing;
+
+    // Пытаемся вставить; на случай гонки — ловим дубликат
+    try {
+        $st = $pdo->prepare("INSERT INTO teachers (last_name, first_name, middle_name, department, position)
+            VALUES (:ln, :fn, :mn, :dep, :pos)");
+        $st->execute([
+            'ln' => $lastName,
+            'fn' => $first !== '' ? $first : '—',
+            'mn' => $middle,
+            'dep' => $department,
+            'pos' => $position,
+        ]);
+        return (int)$pdo->lastInsertId();
+    } catch (PDOException $e) {
+        if ($e->getCode() == 23000) {
+            return findTeacherByShortName($pdo, $shortName);
+        }
+        throw $e;
+    }
+}
+
 function isAdminRow(string $text): bool {
     $skip = ['директор', 'начальник', 'ведущий документовед', 'захарова', 'люльева', 'лезунова'];
     $l = mb_strtolower($text, 'UTF-8');
@@ -590,19 +773,52 @@ function colLetter(int $index): string {
 
 function findTeacherByShortName(PDO $pdo, string $sn): ?int {
     if ($sn === '') return null;
-    $parts = preg_split('/\s+/', $sn);
+    $parts = preg_split('/\s+/', trim($sn));
     $ln = $parts[0] ?? '';
     $i1 = isset($parts[1]) ? rtrim($parts[1], '.') : '';
     $i2 = isset($parts[2]) ? rtrim($parts[2], '.') : '';
+    
+    // Если инициалы склеены (например "Д.Д."), разбиваем по точке
+    if ($i1 !== '' && $i2 === '' && preg_match('/^([А-ЯЁ])\.([А-ЯЁ])\.{0,1}$/ui', $i1, $m)) {
+        $i1 = $m[1];
+        $i2 = $m[2];
+    }
+    // Нормализуем: одиночный инициал из 2+ букв без точек — считаем за имя
+    if (mb_strlen($i1) > 1 && mb_strlen($i1) <= 3 && mb_strtolower($i1) !== 'гпх') {
+        // уже полное/сокращенное имя, оставляем как есть
+    }
+    
     if ($ln === '') return null;
 
+    // Поиск по фамилии + начальным буквам имени/отчества (инициалы -> полное имя)
     $sql = "SELECT id FROM teachers WHERE last_name = :ln";
     $params = ['ln' => $ln];
-    if ($i1 !== '') { $sql .= " AND (first_name LIKE :fn OR first_name = :fe)"; $params['fn'] = $i1 . '%'; $params['fe'] = $i1; }
-    if ($i2 !== '') { $sql .= " AND (middle_name LIKE :mn OR middle_name = :me)"; $params['mn'] = $i2 . '%'; $params['me'] = $i2; }
+    if ($i1 !== '') {
+        // Инициал может быть сокращением (Д. -> Дмитрий) или уже полным именем
+        $sql .= " AND (first_name LIKE :fn1 OR first_name = :fe1 OR LEFT(first_name, 1) = :fi1)";
+        $params['fn1'] = $i1 . '%';
+        $params['fe1'] = $i1;
+        $params['fi1'] = $i1;
+    }
+    if ($i2 !== '') {
+        $sql .= " AND (middle_name LIKE :mn1 OR middle_name = :me1 OR LEFT(middle_name, 1) = :mi1)";
+        $params['mn1'] = $i2 . '%';
+        $params['me1'] = $i2;
+        $params['mi1'] = $i2;
+    }
     $sql .= " LIMIT 1";
     $st = $pdo->prepare($sql); $st->execute($params);
-    $r = $st->fetch(); return $r ? (int)$r['id'] : null;
+    $r = $st->fetch();
+    if ($r) return (int)$r['id'];
+
+    // Фолбэк: ищем только по фамилии (если инициалы не совпали)
+    if ($i1 !== '' || $i2 !== '') {
+        $st2 = $pdo->prepare("SELECT id FROM teachers WHERE last_name = :ln ORDER BY id LIMIT 1");
+        $st2->execute(['ln' => $ln]);
+        $r2 = $st2->fetch();
+        if ($r2) return (int)$r2['id'];
+    }
+    return null;
 }
 
 function findTeacherInText(PDO $pdo, string $text): ?int {
@@ -708,6 +924,21 @@ function detectImportType($spreadsheet): ?string {
     foreach ($sheetNames as $sn) {
         if (mb_strtolower(trim($sn), 'UTF-8') === 'по') return 'software';
     }
+    // Признаки schedule: уникальные заголовки расписания (проверяем раньше classrooms,
+    // т.к. в расписании есть колонка «Аудитория», которая ошибочно ловилась как классы)
+    for ($r = 1; $r <= 3; $r++) {
+        for ($c = 1; $c <= min($maxCol, 30); $c++) {
+            $v = mb_strtolower(trim((string)($sheet->getCell(colLetter($c) . $r)->getValue() ?? '')), 'UTF-8');
+            if (mb_strpos($v, 'дисциплин') !== false
+                || mb_strpos($v, 'экзаменатор') !== false
+                || mb_strpos($v, 'вид занятия') !== false
+                || mb_strpos($v, 'перенос') !== false
+                || mb_strpos($v, 'экзамен/консультация') !== false) {
+                return 'schedule';
+            }
+        }
+    }
+
     // Признаки classrooms: лист «Тех хар-ка» или заголовки «№ аудитории», «корпус»
     $hasTech = false;
     foreach ($sheetNames as $sn) { if (mb_strpos(mb_strtolower(trim($sn), 'UTF-8'), 'тех') !== false) { $hasTech = true; break; } }

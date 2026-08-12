@@ -95,6 +95,15 @@ const app = {
     this.renderMenu();
     const main = document.getElementById('main');
     if (this.clockInterval) { clearInterval(this.clockInterval); this.clockInterval = null; }
+    if (!this._bindGlobalClick) {
+      this._bindGlobalClick = true;
+      this._globalClickHandler = (e) => {
+        const wrap = document.querySelector('.group-search');
+        const dd = document.getElementById('dash-group-search-dropdown');
+        if (wrap && dd && !wrap.contains(e.target) && !dd.contains(e.target)) this.closeGroupSearchDropdown();
+      };
+      document.addEventListener('click', this._globalClickHandler);
+    }
     switch (section) {
       case 'dashboard': this.pageDashboard(main); break;
       case 'teachers': this.pageTeachers(main); break;
@@ -165,10 +174,11 @@ const app = {
         <div class="dashboard-clock" id="dashboard-clock"></div>
         <div class="dashboard-filters">
           <input type="date" id="dash-date" value="${this.dashboardDate}" onchange="app.onDashboardDateChange()">
-          <select id="dash-group" onchange="app.onDashboardGroupChange()">
-            <option value="">Все группы</option>
-          </select>
-          <button class="primary" onclick="app.loadDashboardSchedule()">Показать</button>
+          <div class="group-search">
+            <input type="text" id="dash-group-search" placeholder="Поиск группы..." autocomplete="off"
+              oninput="app.onGroupSearchInput()" onkeydown="app.onGroupSearchKeydown(event)">
+            <div class="group-search-dropdown" id="dash-group-search-dropdown" style="display:none"></div>
+          </div>
         </div>
       </div>
       <div class="stats" id="stats-cards"></div>
@@ -184,9 +194,75 @@ const app = {
     this.loadDashboardSchedule();
   },
 
-  onDashboardGroupChange() {
-    this.dashboardGroup = document.getElementById('dash-group').value || null;
+  onGroupSearchInput() {
+    this.renderGroupSearchDropdown();
+    const input = document.getElementById('dash-group-search');
+    if (input && !input.value.trim() && this.dashboardGroup) {
+      this.dashboardGroup = null;
+      this.loadDashboardSchedule();
+    }
+  },
+
+  onGroupSearchKeydown(e) {
+    if (e.key === 'Escape') { this.closeGroupSearchDropdown(); return; }
+    const dd = document.getElementById('dash-group-search-dropdown');
+    if (!dd || dd.style.display === 'none') return;
+    const items = Array.from(dd.querySelectorAll('.group-search-item'));
+    if (!items.length) return;
+    const cur = dd.querySelector('.group-search-item.active');
+    let idx = items.indexOf(cur);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idx = idx < items.length - 1 ? idx + 1 : 0;
+      this.setActiveSearchItem(idx);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = idx > 0 ? idx - 1 : items.length - 1;
+      this.setActiveSearchItem(idx);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (cur) this.selectGroupFromSearch(cur.getAttribute('data-group'));
+    }
+  },
+
+  setActiveSearchItem(idx) {
+    const dd = document.getElementById('dash-group-search-dropdown');
+    if (!dd) return;
+    const items = dd.querySelectorAll('.group-search-item');
+    items.forEach((it, i) => it.classList.toggle('active', i === idx));
+    const act = items[idx];
+    if (act) act.scrollIntoView({ block: 'nearest' });
+  },
+
+  renderGroupSearchDropdown() {
+    const input = document.getElementById('dash-group-search');
+    const dd = document.getElementById('dash-group-search-dropdown');
+    if (!input || !dd) return;
+    const q = input.value.trim().toLowerCase();
+    if (!q) { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+    const filtered = (this._dashGroups || []).filter(g => g.toLowerCase().includes(q));
+    if (!filtered.length) {
+      dd.innerHTML = '<div class="group-search-empty">Нет совпадений</div>';
+    } else {
+      dd.innerHTML = filtered.map(g => {
+        const safe = this.esc(g).replace(/'/g, '&#39;');
+        return `<div class="group-search-item" data-group="${safe}" onmousedown="app.selectGroupFromSearch('${safe}')">${this.esc(g)}</div>`;
+      }).join('');
+    }
+    dd.style.display = 'block';
+  },
+
+  selectGroupFromSearch(g) {
+    const input = document.getElementById('dash-group-search');
+    if (input) input.value = g;
+    this.closeGroupSearchDropdown();
+    this.dashboardGroup = g || null;
     this.loadDashboardSchedule();
+  },
+
+  closeGroupSearchDropdown() {
+    const dd = document.getElementById('dash-group-search-dropdown');
+    if (dd) { dd.style.display = 'none'; dd.innerHTML = ''; }
   },
 
   async loadDashboardStats() {
@@ -212,10 +288,7 @@ const app = {
   async loadDashboardGroups() {
     try {
       const r = await this.api('GET', '/schedule/groups');
-      const groups = r.data || [];
-      const sel = document.getElementById('dash-group');
-      if (!sel) return;
-      sel.innerHTML = '<option value="">Все группы</option>' + groups.map(g => `<option value="${g}" ${this.dashboardGroup === g ? 'selected' : ''}>${g}</option>`).join('');
+      this._dashGroups = (r.data || []).map(g => String(g).trim()).filter(Boolean);
     } catch(e) {}
   },
 
@@ -223,7 +296,7 @@ const app = {
     const container = document.getElementById('dash-schedule');
     container.innerHTML = '<div class="spinner"></div>';
     const params = { per_page: 50, date: this.dashboardDate };
-    if (this.dashboardGroup) params.numerator_denominator = this.dashboardGroup;
+    if (this.dashboardGroup) params.group_code = this.dashboardGroup;
     try {
       const data = await this.api('GET', '/schedule?' + new URLSearchParams(params));
       const items = data.data.items || [];
@@ -239,7 +312,7 @@ const app = {
           <td>${time}</td>
           <td>${this.esc(item.discipline || '-')}</td>
           <td>${this.esc(item.lesson_type || '-')}</td>
-          <td>${item.room_number ? app.esc(item.room_number + (item.building ? ' (' + item.building + ')' : '')) : '-'}</td>
+          <td>${app.esc(app.scheduleRooms(item))}</td>
           <td>${this.esc(item.teacher_name || '-')}</td>
         </tr>`;
       });
@@ -254,11 +327,13 @@ const app = {
   async renderCrudPage(main, config) {
     const { title, columns, apiGet, apiCreate, apiUpdate, apiDelete, filters, formFields, itemName } = config;
     const adminBtns = app.currentUser?.role === 'admin' ? `<button class="danger" onclick="app.truncateTable('${config.id}')" title="Очистить всю таблицу">Очистить</button><button class="primary" onclick="app.openForm('${config.id}', null)">+ Добавить</button>` : `<button class="primary" onclick="app.openForm('${config.id}', null)">+ Добавить</button>`;
+    const exportBtn = (['teachers','classrooms','schedule','software'].indexOf(config.type) !== -1) ? `<button class="success" onclick="app.exportExcel('${config.type}')">Экспорт Excel</button>` : '';
+    const reportBtn = config.showReport ? `<button class="success" onclick="app.exportExcel('report')">Отчёт по загруженности</button>` : '';
     main.innerHTML = `
       <div class="card">
         <div class="card-header">
           <h3>${title}</h3>
-          <div class="card-actions">${adminBtns}</div>
+          <div class="card-actions">${reportBtn}${exportBtn}${adminBtns}</div>
         </div>
         <div class="filters-bar" id="filters-${config.id}">${this.renderFilters(config)}
           <label class="per-page-label">Строк: <select class="filter-input" id="per-page-${config.id}" onchange="app.onPerPageChange('${config.id}')"><option value="15">15</option><option value="50" selected>50</option><option value="100">100</option></select></label>
@@ -335,8 +410,9 @@ const app = {
       if (config.editingItem && config.editingItem.id === item.id) {
         return this.buildEditRow(config);
       }
+      const rowCls = this.rowClass(item);
       const cells = config.columns.map((c, ci) => `<td>${this.formatCell(item, c, idx)}</td>`).join('');
-      return `<tr id="row-${config.id}-${item.id}" class="data-row">
+      return `<tr id="row-${config.id}-${item.id}" class="data-row ${rowCls}">
         <td class="row-num">${idx}</td>
         ${cells}
         <td class="row-actions">
@@ -371,6 +447,11 @@ const app = {
     </td></tr>`;
   },
 
+  rowClass(item) {
+    if (item.transfer_cancel === 'перенос') return 'row-transfer';
+    if (item.transfer_cancel === 'отмена') return 'row-cancel';
+    return '';
+  },
   formatCell(item, col, idx) {
     if (col.render) return col.render(item, idx);
     let val = item[col.field];
@@ -454,6 +535,12 @@ const app = {
       if (f.type === 'checkbox') data[f.field] = el.checked ? 1 : 0;
       else data[f.field] = el.value;
     });
+
+    // Для расписания: classrooms — строка аудиторий; дублируем в classrooms_raw
+    if (config.type === 'schedule' && data.classrooms !== undefined) {
+      data.classrooms_raw = data.classrooms;
+    }
+
     try {
       if (config.editingItem?.id) {
         await config.apiUpdate(config.editingItem.id, data);
@@ -485,6 +572,20 @@ const app = {
       await this.loadCrudData(config);
       alert(`Таблица «${label}» очищена.`);
     } catch (e) { alert('Ошибка: ' + e.message); }
+  },
+
+  async exportExcel(action) {
+    try {
+      const data = await this.api('GET', '/export/' + action);
+      const url = data.data && data.data.url;
+      if (!url) { alert('Экспорт выполнен'); return; }
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) { alert('Ошибка экспорта: ' + e.message); }
   },
 
   async deleteRow(id, itemId) {
@@ -572,7 +673,7 @@ const app = {
     try { const r = await this.api('GET', '/classrooms/room-types'); roomTypes = r.data || []; } catch(e) {}
     const toOpts = (arr) => (arr || []).map(d => ({ value: d, label: d }));
     this.registerConfig('classrooms', {
-      type: 'classrooms', itemName: 'Аудиторию', title: 'Аудитории',
+      type: 'classrooms', itemName: 'Аудиторию', title: 'Аудитории', showReport: true,
       columns: [
         { label: 'Аудитория', field: 'room_number' }, { label: 'Корпус', field: 'building' },
         { label: 'Тип', field: 'room_type' }, { label: 'ПК', field: 'computers_count' },
@@ -614,8 +715,11 @@ const app = {
         { label: 'Дисциплина', field: 'discipline' },
         { label: 'Вид', field: 'exam_type' },
         { label: 'Экзаменатор', field: 'examiner' },
-        { label: 'Аудитория', field: 'classroom_room', render: item => item.classroom_room ? `${item.classroom_room} (${item.classroom_building || ''})` : '-' },
-        { label: 'Перенос', field: 'transfer_cancel', render: item => item.transfer_cancel === 'перенос' ? '<span class="badge badge-warning">Перенос</span>' : '' },
+        { label: 'Аудитория', field: 'classrooms', render: item => {
+            const rooms = item.classrooms || item.classrooms_raw || (item.room_number && item.building ? `${item.building}${item.room_number}` : '') || '-';
+            return app.esc(rooms === 'ДО' ? 'ДО' : rooms);
+        } },
+        { label: 'Перенос/отмена', field: 'transfer_cancel', render: item => app.transferBadge(item.transfer_cancel) },
       ],
       apiGet: (p) => this.api('GET', '/schedule?' + new URLSearchParams(p)),
       apiCreate: (d) => this.api('POST', '/schedule', d),
@@ -623,7 +727,7 @@ const app = {
       apiDelete: (id) => this.api('DELETE', '/schedule/' + id),
       filters: [
         { type: 'text', field: 'search', placeholder: 'Поиск по дисциплине, группе, преподавателю...' },
-        { type: 'select', field: 'transfer_cancel', placeholder: 'Все', options: [{ value: 'перенос', label: 'Переносы' }, { value: 'нет', label: 'Без переносов' }] },
+        { type: 'select', field: 'transfer_cancel', placeholder: 'Все', options: [{ value: 'перенос', label: 'Переносы' }, { value: 'отмена', label: 'Отмены' }, { value: 'нет', label: 'Без переносов/отмен' }] },
       ],
       formFields: [
         { field: 'date', label: 'Дата', placeholder: '2025-12-22' },
@@ -633,6 +737,7 @@ const app = {
         { field: 'discipline', label: 'Дисциплина', placeholder: 'Информационные технологии' },
         { field: 'exam_type', label: 'Вид', placeholder: 'экзамен / консультация' },
         { field: 'examiner', label: 'Экзаменатор', placeholder: 'Иванов И.И.' },
+        { field: 'classrooms', label: 'Аудитории', placeholder: 'Д234, Д237 или ДО' },
         { field: 'group_department', label: 'Кафедра группы', placeholder: 'КиКТ' },
         { field: 'teacher_department', label: 'Кафедра преп.', placeholder: 'ИиУС' },
         { field: 'teacher_position', label: 'Должность преп.', placeholder: 'ст. пр.' },
@@ -709,6 +814,9 @@ const app = {
         <div class="form-group"><label>Файл (.xlsx, .xls)</label>
           <input type="file" id="import-file" accept=".xlsx,.xls">
         </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="import-create-missing"> Создавать отсутствующих преподавателей из расписания</label>
+        </div>
         <button class="primary" id="import-btn" onclick="app.doImport()">Загрузить</button>
         <div class="import-progress" id="import-progress" style="display:none">
           <div class="spinner"></div>
@@ -721,6 +829,7 @@ const app = {
   async doImport() {
     const fileEl = document.getElementById('import-file');
     const type = document.getElementById('import-type').value;
+    const createMissing = document.getElementById('import-create-missing');
     const result = document.getElementById('import-result');
     const progress = document.getElementById('import-progress');
     const btn = document.getElementById('import-btn');
@@ -731,6 +840,7 @@ const app = {
     const fd = new FormData();
     fd.append('file', fileEl.files[0]);
     fd.append('type', type);
+    if (createMissing && createMissing.checked) fd.append('create_missing', '1');
     try {
       const resp = await fetch(this.apiBase + '/import', { method: 'POST', body: fd });
       const data = await resp.json();
@@ -745,6 +855,15 @@ const app = {
   },
 
   // ====================== УТИЛИТЫ ======================
+  transferBadge(tc) {
+    if (tc === 'перенос') return '<span class="badge badge-warning">Перенос</span>';
+    if (tc === 'отмена') return '<span class="badge badge-danger">Отмена</span>';
+    return '';
+  },
+  scheduleRooms(item) {
+    const rooms = item.classrooms || item.classrooms_raw || (item.room_number && item.building ? `${item.building}${item.room_number}` : '');
+    return rooms === 'ДО' ? 'ДО' : (rooms || '-');
+  },
   esc(str) {
     if (str === null || str === undefined) return '';
     return String(str).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');

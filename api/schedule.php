@@ -9,6 +9,8 @@
  * POST   /api/schedule/bulk-delete — массовое удаление при обновлении импорта
  */
 
+require_once __DIR__ . '/import.php';
+
 function handleSchedule(string $method, string $action, ?int $id): void {
     if ($action === 'bulk-delete') {
         if ($method !== 'POST') jsonError('Метод не поддерживается', 405);
@@ -134,8 +136,12 @@ function listSchedule(): void {
     $total = (int)$countStmt->fetchColumn();
 
     $stmt = $db->prepare("
-        SELECT s.*, c.room_number, c.building, c.room_type,
-               CONCAT(t.last_name, ' ', t.first_name, ' ', COALESCE(t.middle_name, '')) AS teacher_name
+        SELECT s.*, c.room_number, c.building,
+               CONCAT(t.last_name, ' ', t.first_name, ' ', COALESCE(t.middle_name, '')) AS teacher_name,
+               (SELECT GROUP_CONCAT(CONCAT(c2.building, c2.room_number) ORDER BY c2.room_number SEPARATOR ', ')
+                FROM schedule_classrooms sc
+                JOIN classrooms c2 ON sc.classroom_id = c2.id
+                WHERE sc.schedule_id = s.id) AS classrooms
         FROM schedule s
         LEFT JOIN classrooms c ON s.classroom_id = c.id
         LEFT JOIN teachers t ON s.teacher_id = t.id
@@ -160,8 +166,12 @@ function listSchedule(): void {
 function getScheduleItem(int $id): void {
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT s.*, c.room_number, c.building, c.room_type,
-               CONCAT(t.last_name, ' ', t.first_name, ' ', COALESCE(t.middle_name, '')) AS teacher_name
+        SELECT s.*, c.room_number, c.building,
+               CONCAT(t.last_name, ' ', t.first_name, ' ', COALESCE(t.middle_name, '')) AS teacher_name,
+               (SELECT GROUP_CONCAT(CONCAT(c2.building, c2.room_number) ORDER BY c2.room_number SEPARATOR ', ')
+                FROM schedule_classrooms sc
+                JOIN classrooms c2 ON sc.classroom_id = c2.id
+                WHERE sc.schedule_id = s.id) AS classrooms
         FROM schedule s
         LEFT JOIN classrooms c ON s.classroom_id = c.id
         LEFT JOIN teachers t ON s.teacher_id = t.id
@@ -175,21 +185,41 @@ function getScheduleItem(int $id): void {
 
 function createScheduleItem(): void {
     $data = getJsonInput();
-    validateRequired($data, ['classroom_id', 'date']);
+    validateRequired($data, ['date']);
+    $dedupKey = scheduleDedupKeyFromData($data);
+
+    // Аудитории: строка из формы (например «Д234, Д237» или «ДО»)
+    $classroomsRaw = isset($data['classrooms']) ? trim((string)$data['classrooms']) : '';
+
+    // classroom_id определяем из строки аудиторий, если не задан явно
+    $classroomId = isset($data['classroom_id']) && $data['classroom_id'] !== '' && $data['classroom_id'] !== null
+        ? (int)$data['classroom_id']
+        : null;
+    if (!$classroomId && $classroomsRaw !== '') {
+        foreach (parseClassrooms($classroomsRaw) as $rc) {
+            if ($rc['building'] !== null) {
+                ensureClassroom($pdo = getDB(), $rc['room_number'], $rc['building']);
+                $classroomId = findClassroomByRoom($pdo, $rc['building'] . $rc['room_number']);
+                break;
+            }
+        }
+    }
 
     $db = getDB();
     $stmt = $db->prepare("
-        INSERT INTO schedule (classroom_id, teacher_id, numerator_denominator, date, day_of_week,
+        INSERT INTO schedule (dedup_key, classroom_id, classrooms_raw, teacher_id, numerator_denominator, date, day_of_week,
             discipline, group_department, group_code, teacher_department, teacher_position,
             examiner, exam_type, session_start, session_end,
             pair_number, time_start, time_end, is_nonstandard_time, lesson_type, is_occupied, transfer_cancel)
-        VALUES (:classroom_id, :teacher_id, :numerator_denominator, :date, :day_of_week,
+        VALUES (:dedup_key, :classroom_id, :classrooms_raw, :teacher_id, :numerator_denominator, :date, :day_of_week,
             :discipline, :group_department, :group_code, :teacher_department, :teacher_position,
             :examiner, :exam_type, :session_start, :session_end,
             :pair_number, :time_start, :time_end, :is_nonstandard_time, :lesson_type, :is_occupied, :transfer_cancel)
     ");
     $stmt->execute([
-        'classroom_id'          => $data['classroom_id'],
+        'dedup_key'             => $dedupKey,
+        'classroom_id'          => $classroomId,
+        'classrooms_raw'        => $classroomsRaw !== '' ? $classroomsRaw : null,
         'teacher_id'            => $data['teacher_id'] ?? null,
         'numerator_denominator' => $data['numerator_denominator'] ?? null,
         'date'                  => $data['date'],
@@ -213,6 +243,7 @@ function createScheduleItem(): void {
     ]);
 
     $id = $db->lastInsertId();
+    syncScheduleClassrooms($db, $id, $classroomsRaw);
     getScheduleItem($id);
 }
 
@@ -224,7 +255,7 @@ function updateScheduleItem(int $id): void {
     if (!$check->fetch()) jsonError('Запись расписания не найдена', 404);
 
     $fields = [
-        'classroom_id', 'teacher_id', 'numerator_denominator', 'date', 'day_of_week',
+        'classroom_id', 'classrooms_raw', 'teacher_id', 'numerator_denominator', 'date', 'day_of_week',
         'discipline', 'group_department', 'group_code', 'teacher_department', 'teacher_position',
         'examiner', 'exam_type', 'session_start', 'session_end',
         'pair_number', 'time_start', 'time_end', 'is_nonstandard_time', 'lesson_type',
@@ -243,6 +274,10 @@ function updateScheduleItem(int $id): void {
     if (empty($set)) jsonError('Нет данных для обновления');
 
     $db->prepare('UPDATE schedule SET ' . implode(', ', $set) . ' WHERE id = :id')->execute($params);
+    if (array_key_exists('classrooms', $data) || array_key_exists('classrooms_raw', $data)) {
+        $raw = isset($data['classrooms']) ? trim((string)$data['classrooms']) : (isset($data['classrooms_raw']) ? (string)$data['classrooms_raw'] : '');
+        syncScheduleClassrooms($db, $id, $raw);
+    }
     getScheduleItem($id);
 }
 
@@ -277,6 +312,48 @@ function truncateSchedule(): void {
     $db = getDB();
     $db->exec('DELETE FROM schedule');
     jsonSuccess(null, 'Расписание очищено');
+}
+
+/**
+ * Пересоздаёт связи schedule_classrooms для записи по строке аудиторий.
+ */
+function syncScheduleClassrooms(PDO $db, int $scheduleId, string $raw): void {
+    if ($scheduleId <= 0) return;
+    $db->prepare('DELETE FROM schedule_classrooms WHERE schedule_id = :sid')->execute(['sid' => $scheduleId]);
+    $rows = parseClassrooms($raw);
+    $insert = $db->prepare("INSERT IGNORE INTO schedule_classrooms (schedule_id, classroom_id) VALUES (:sid, :cid)");
+    foreach ($rows as $rc) {
+        if ($rc['building'] === null) continue; // «ДО»
+        ensureClassroom($db, $rc['room_number'], $rc['building']);
+        $cid = findClassroomByRoom($db, $rc['building'] . $rc['room_number']);
+        if ($cid) $insert->execute(['sid' => $scheduleId, 'cid' => $cid]);
+    }
+}
+
+function scheduleDedupKeyFromData(array $data): string {
+    $date = $data['date'] ?? null;
+    $time = $data['time_start'] ?? null;
+    $discipline = $data['discipline'] ?? null;
+    $groupCode = $data['group_code'] ?? null;
+    $examiner = $data['examiner'] ?? null;
+    $classroomId = $data['classroom_id'] ?? null;
+
+    $parts = [
+        $date ?: '',
+        $time ?: '',
+        trim((string)$discipline),
+        trim((string)$groupCode),
+        trim((string)$examiner),
+    ];
+    // фолбэк по аудитории для записей без дисциплины/группы/экзаменатора
+    if (!trim(implode('', [$discipline, $groupCode, $examiner]))) {
+        $parts = [
+            $date ?: '',
+            $time ?: '',
+            $classroomId ? (string)$classroomId : '',
+        ];
+    }
+    return substr(hash('md5', implode('|', $parts)), 0, 64);
 }
 
 function listGroups(): void {

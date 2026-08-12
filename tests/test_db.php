@@ -68,7 +68,7 @@ $expectedColumns = [
     'users'      => ['id', 'username', 'password', 'role', 'full_name', 'created_at', 'updated_at'],
     'classrooms' => ['id', 'room_number', 'building', 'room_type', 'software_installed', 'seats', 'has_projector', 'has_speakers', 'computers_count', 'created_at', 'updated_at'],
     'teachers'   => ['id', 'last_name', 'first_name', 'middle_name', 'position', 'degree', 'title', 'department', 'employment_type', 'email', 'phone', 'notes', 'created_at', 'updated_at'],
-    'schedule'   => ['id', 'classroom_id', 'teacher_id', 'numerator_denominator', 'date', 'day_of_week', 'pair_number', 'time_start', 'time_end', 'is_nonstandard_time', 'lesson_type', 'is_occupied', 'transfer_cancel', 'created_at', 'updated_at'],
+    'schedule'   => ['id', 'dedup_key', 'classroom_id', 'teacher_id', 'numerator_denominator', 'date', 'day_of_week', 'discipline', 'group_department', 'group_code', 'teacher_department', 'teacher_position', 'examiner', 'exam_type', 'session_start', 'session_end', 'pair_number', 'time_start', 'time_end', 'is_nonstandard_time', 'lesson_type', 'is_occupied', 'transfer_cancel', 'created_at', 'updated_at'],
     'software'   => ['id', 'classroom_id', 'room_number', 'building', 'name', 'notes', 'created_at', 'updated_at'],
 ];
 
@@ -138,8 +138,8 @@ echo "\n--- Индексы ---\n";
 
 $expectedIndexes = [
     'classrooms' => ['idx_building', 'idx_room_type'],
-    'teachers'   => ['idx_last_name', 'idx_department', 'idx_employment_type'],
-    'schedule'   => ['idx_date', 'idx_transfer_cancel', 'idx_is_occupied'],
+    'teachers'   => ['idx_last_name', 'idx_department', 'idx_employment_type', 'idx_unique_fio'],
+    'schedule'   => ['idx_date', 'idx_transfer_cancel', 'idx_is_occupied', 'idx_unique_schedule_dedup'],
     'software'   => ['idx_building'],
 ];
 
@@ -183,7 +183,7 @@ test('Каскадное удаление: schedule → classrooms', function ()
         $classroomId = $pdo->lastInsertId();
 
         // Создаем запись расписания
-        $pdo->prepare("INSERT INTO schedule (classroom_id, date) VALUES (:cid, CURDATE())")
+        $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, date) VALUES ('cascade-test', :cid, CURDATE())")
             ->execute(['cid' => $classroomId]);
 
         // Удаляем аудиторию

@@ -37,10 +37,12 @@ fi
 
 # Миграции: добавляем новые колонки, если их еще нет
 echo "Проверка миграций..."
-for col in "discipline" "group_department" "group_code" "teacher_department" "teacher_position" "examiner" "exam_type" "session_start" "session_end"; do
+for col in "dedup_key" "classrooms_raw" "discipline" "group_department" "group_code" "teacher_department" "teacher_position" "examiner" "exam_type" "session_start" "session_end"; do
   EXISTS=$(mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='schedule' AND COLUMN_NAME='$col'" 2>/dev/null || echo "0")
   if [ "$EXISTS" -eq "0" ]; then
     case $col in
+      dedup_key) AFTER="id"; TYPE="VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'Уникальный ключ записи для защиты от дублей'" ;;
+      classrooms_raw) AFTER="classroom_id"; TYPE="VARCHAR(255) DEFAULT NULL COMMENT 'Исходная строка аудиторий'" ;;
       discipline) AFTER="day_of_week"; TYPE="VARCHAR(255) DEFAULT NULL COMMENT 'Дисциплина'" ;;
       group_department) AFTER="discipline"; TYPE="VARCHAR(100) DEFAULT NULL COMMENT 'Кафедра группы'" ;;
       group_code) AFTER="group_department"; TYPE="VARCHAR(50) DEFAULT NULL COMMENT 'Шифр группы'" ;;
@@ -56,18 +58,51 @@ for col in "discipline" "group_department" "group_code" "teacher_department" "te
   fi
 done
 # Добавление уникальных ключей
-for idx in "schedule idx_unique_schedule" "software idx_unique_software"; do
+for idx in "schedule idx_unique_schedule_dedup" "software idx_unique_software" "teachers idx_unique_fio"; do
   tbl="${idx%% *}"
   idxname="${idx##* }"
   EXISTS=$(mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='$tbl' AND INDEX_NAME='$idxname'" 2>/dev/null || echo "0")
   if [ "$EXISTS" -eq "0" ]; then
     echo "  Добавление уникального ключа $idxname в $tbl..."
     case $tbl in
-      schedule) mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE s1 FROM schedule s1 INNER JOIN schedule s2 ON s1.classroom_id = s2.classroom_id AND s1.date = s2.date AND s1.pair_number = s2.pair_number AND s1.time_start = s2.time_start AND s1.id > s2.id;" 2>/dev/null; mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE schedule ADD UNIQUE KEY idx_unique_schedule (classroom_id, date, pair_number, time_start);" 2>/dev/null ;;
-      software) mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE s1 FROM software s1 INNER JOIN software s2 ON s1.room_number = s2.room_number AND s1.building = s2.building AND s1.name = s2.name AND s1.id > s2.id;" 2>/dev/null; mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE software ADD UNIQUE KEY idx_unique_software (room_number, building, name);" 2>/dev/null ;;
+      schedule)
+        case $idxname in
+          idx_unique_schedule_dedup)
+            # Заполняем dedup_key для существующих записей (по содержимому)
+            mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "UPDATE schedule SET dedup_key = SUBSTRING(MD5(CONCAT_WS('|', IFNULL(date, ''), IFNULL(time_start, ''), IFNULL(discipline, ''), IFNULL(group_code, ''), IFNULL(examiner, ''), IFNULL(classroom_id, ''))), 1, 64);" 2>/dev/null
+            # Удаляем дубликаты по dedup_key
+            mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE s1 FROM schedule s1 INNER JOIN schedule s2 ON s1.dedup_key = s2.dedup_key AND s1.id > s2.id;" 2>/dev/null
+            mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE schedule ADD UNIQUE KEY idx_unique_schedule_dedup (dedup_key);" 2>/dev/null
+            ;;
+        esac
+        ;;
+      software)
+        mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE s1 FROM software s1 INNER JOIN software s2 ON s1.room_number = s2.room_number AND s1.building = s2.building AND s1.name = s2.name AND s1.id > s2.id;" 2>/dev/null
+        mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE software ADD UNIQUE KEY idx_unique_software (room_number, building, name);" 2>/dev/null
+        ;;
+      teachers)
+        mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "DELETE t1 FROM teachers t1 INNER JOIN teachers t2 ON t1.last_name = t2.last_name AND t1.first_name = t2.first_name AND t1.middle_name <=> t2.middle_name AND t1.id > t2.id;" 2>/dev/null
+        mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "ALTER TABLE teachers ADD UNIQUE KEY idx_unique_fio (last_name, first_name, middle_name);" 2>/dev/null
+        ;;
     esac
   fi
 done
+
+# Таблица связи расписания с несколькими аудиториями
+SC_EXISTS=$(mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME' AND table_name='schedule_classrooms'" 2>/dev/null || echo "0")
+if [ "$SC_EXISTS" -eq "0" ]; then
+    echo "  Создание таблицы schedule_classrooms..."
+    mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "CREATE TABLE IF NOT EXISTS schedule_classrooms (
+      id INT(11) NOT NULL AUTO_INCREMENT,
+      schedule_id INT(11) NOT NULL,
+      classroom_id INT(11) NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY idx_sched_classroom (schedule_id, classroom_id),
+      KEY idx_classroom (classroom_id),
+      CONSTRAINT fk_sc_schedule FOREIGN KEY (schedule_id) REFERENCES schedule(id) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT fk_sc_classroom FOREIGN KEY (classroom_id) REFERENCES classrooms(id) ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;" 2>/dev/null
+fi
 
 echo "Миграции проверены."
 
