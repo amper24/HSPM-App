@@ -738,13 +738,6 @@ const app = new Vue({
                   <option v-for="o in (f.options || (filterOptions[section] && filterOptions[section][f.field]) || [])" :key="o.value" :value="o.value">{{ o.label }}</option>
                 </select>
               </template>
-              <label class="per-page-label">Строк:
-                <select class="filter-input" :id="'per-page-' + section" @change="onPerPageChange(section)">
-                  <option value="15">15</option>
-                  <option value="50" selected>50</option>
-                  <option value="100">100</option>
-                </select>
-              </label>
             </div>
 
             <div v-if="section === 'classrooms'" class="free-search card">
@@ -869,6 +862,15 @@ const app = new Vue({
                 <span v-if="b.page === -1" :key="'d'+i" class="page-dots">...</span>
                 <button v-else :key="b.page" class="page-btn" :class="{ primary: b.page === state[section].page, outline: b.page !== state[section].page }" :disabled="b.disabled" @click="goPage(section, b.page)">{{ b.label }}</button>
               </template>
+            </div>
+            <div class="per-page-row">
+              <label class="per-page-label">Строк:
+                <select class="filter-input" :id="'per-page-' + section" @change="onPerPageChange(section)">
+                  <option value="15">15</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                </select>
+              </label>
             </div>
           </div>
 
