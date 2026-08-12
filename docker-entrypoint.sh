@@ -31,6 +31,16 @@ if [ "$TABLE_COUNT" -eq "0" ]; then
     echo "Первичная инициализация базы данных..."
     mysql --default-character-set=utf8 -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < /var/www/html/database/schema.sql
     echo "База данных инициализирована."
+
+    # Устанавливаем пароль администратора (по умолчанию admin123)
+    export ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
+    php -r '
+        $dsn = "mysql:host=" . getenv("DB_HOST") . ";dbname=" . getenv("DB_NAME") . ";charset=utf8";
+        $pdo = new PDO($dsn, getenv("DB_USER"), getenv("DB_PASS"));
+        $hash = password_hash(getenv("ADMIN_PASSWORD") ?: "admin123", PASSWORD_BCRYPT);
+        $pdo->prepare("UPDATE users SET password = ? WHERE username = ?")->execute([$hash, "admin"]);
+    '
+    echo "Пароль администратора установлен."
 else
     echo "База данных уже содержит таблицы ($TABLE_COUNT шт.), пропускаем импорт схемы."
 fi
@@ -229,9 +239,9 @@ echo "  Кодировка: UTF-8 (ru_RU.UTF-8)"
 echo "========================================"
 echo ""
 echo "  Доступ:"
-echo "    URL:    http://localhost:8080"
+echo "    URL:    http://localhost:${APP_PORT:-8080}"
 echo "    Логин:  admin"
-echo "    Пароль: admin123"
+echo "    Пароль: ${ADMIN_PASSWORD:-admin123}"
 echo ""
 echo "  Управление из консоли:"
 echo "    docker exec vshpm-app php /var/www/html/hspm-admin help"
