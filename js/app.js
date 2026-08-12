@@ -50,7 +50,7 @@ const app = new Vue({
       filterOptions: {}, // id -> { key: [values] }
 
       // import
-      importCfg: { type: 'teachers', file: null, busy: false, result: '', progress: false, createMissing: true, replace: false },
+      importCfg: { type: 'teachers', file: null, busy: false, result: '', progress: false, createMissing: false, replace: false },
       // free classrooms
       free: { date: new Date().toISOString().split('T')[0], pair_number: '', building: '', room_type: '', has_projector: '', has_speakers: '', seats_min: '', results: [], searched: false, loading: false }
     };
