@@ -1,0 +1,49 @@
+version: '3.8'
+
+# Продакшн-развертывание на основе готового образа из GHCR.
+# Образ собирается автоматически GitHub Actions и публикуется в ghcr.io/<user>/<repo>.
+# Замените <GITHUB_USER> и <REPO_NAME> на ваши значения или задайте через переменную окружения.
+services:
+  db:
+    image: mysql:5.7.21
+    container_name: vshpm-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret}
+      MYSQL_DATABASE: ${DB_NAME:-vshpm_edu}
+      MYSQL_USER: ${DB_USER:-vshpm}
+      MYSQL_PASSWORD: ${DB_PASS:-vshpm_secret}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --character-set-server=utf8 --collation-server=utf8_general_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ${APP_IMAGE:-ghcr.io/amper24/hspm-app:latest}
+    container_name: vshpm-app
+    restart: always
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-vshpm_edu}
+      DB_USER: ${DB_USER:-vshpm}
+      DB_PASS: ${DB_PASS:-vshpm_secret}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/var/www/html/uploads
+      - exports:/var/www/html/exports
+      - backups:/var/www/html/backups
+
+volumes:
+  mysql_data:
+  uploads:
+  exports:
+  backups:
