@@ -274,6 +274,14 @@ const app = new Vue({
       if (!this.filterOptions[id]) this.$set(this.filterOptions, id, {});
 
       if (!this.configs[id]) this.buildConfig(id);
+      const cfg = this.configs[id];
+      if (cfg && cfg.filters) {
+        for (const f of cfg.filters) {
+          if (this.filters[id][f.field] === undefined) {
+            this.$set(this.filters[id], f.field, '');
+          }
+        }
+      }
       this.loadFilterOptions(id);
       this.loadCrudData(id);
     },
