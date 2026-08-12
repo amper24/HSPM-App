@@ -7,6 +7,7 @@ vendor/
 # Загруженные и экспортированные файлы
 uploads/
 exports/
+backups/
 
 # Системные файлы
 .DS_Store
