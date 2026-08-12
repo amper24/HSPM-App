@@ -45,13 +45,14 @@ const app = new Vue({
         software: null,
         users: null
       },
-      state: {},       // id -> { page, perPage, items, total, pages, loading, filter options, editingItem }
+      state: {},       // id -> { page, perPage, items, total, pages, loading, editingItem }
       filters: {},     // id -> { field: value }
-      filterOptions: {} // id -> { key: [values] }
+      filterOptions: {}, // id -> { key: [values] }
 
       // import
-      , importCfg: { type: 'teachers', file: null, busy: false, result: '', progress: false, createMissing: true, replace: false }
-      , free: { date: new Date().toISOString().split('T')[0], pair_number: '', building: '', room_type: '', has_projector: '', has_speakers: '', seats_min: '', results: [], searched: false, loading: false }
+      importCfg: { type: 'teachers', file: null, busy: false, result: '', progress: false, createMissing: true, replace: false },
+      // free classrooms
+      free: { date: new Date().toISOString().split('T')[0], pair_number: '', building: '', room_type: '', has_projector: '', has_speakers: '', seats_min: '', results: [], searched: false, loading: false }
     };
   },
 
@@ -266,29 +267,19 @@ const app = new Vue({
     // ====================== CONFIG / CRUD ======================
     ensureConfig(id) {
       if (id === 'users' && !this.isAdmin) return;
-      const cfg = this.configs[id];
-      this.state[id] = this.state[id] || { page: 1, perPage: 50, items: [], total: 0, pages: 1, loading: false, editingItem: null };
-      this.filters[id] = this.filters[id] || {};
-      this.filterOptions[id] = this.filterOptions[id] || {};
-      if (!cfg) {
-        this.buildConfig(id).then(() => this.loadCrudData(id));
-      } else {
-        this.loadCrudData(id);
-        this.loadFilterOptions(id);
+      if (!this.state[id]) {
+        this.$set(this.state, id, { page: 1, perPage: 50, items: [], total: 0, pages: 1, loading: false, editingItem: null });
       }
+      if (!this.filters[id]) this.$set(this.filters, id, {});
+      if (!this.filterOptions[id]) this.$set(this.filterOptions, id, {});
+
+      if (!this.configs[id]) this.buildConfig(id);
+      this.loadFilterOptions(id);
+      this.loadCrudData(id);
     },
 
-    async buildConfig(id) {
-      const load = async (url) => {
-        try { const r = await api.request('GET', url); return r.data || []; } catch (e) { return []; }
-      };
-      const toOpts = (arr) => (arr || []).map(d => ({ value: d, label: d }));
-
+    buildConfig(id) {
       if (id === 'teachers') {
-        const [departments, degrees, titles, empTypes] = await Promise.all([
-          load('/teachers/departments'), load('/teachers/degrees'), load('/teachers/titles'), load('/teachers/employment-types')
-        ]);
-        this.filterOptions.teachers = { department: toOpts(departments), degree: toOpts(degrees), title: toOpts(titles), employment_type: toOpts(empTypes) };
         this.configs.teachers = {
           type: 'teachers', title: 'Преподаватели', itemName: 'Преподаватель', showReport: false,
           columns: [
@@ -314,8 +305,6 @@ const app = new Vue({
           ]
         };
       } else if (id === 'classrooms') {
-        const roomTypes = await load('/classrooms/room-types');
-        this.filterOptions.classrooms = { room_type: toOpts(roomTypes) };
         this.configs.classrooms = {
           type: 'classrooms', title: 'Аудитории', itemName: 'Аудиторию', showReport: true,
           columns: [
@@ -367,8 +356,6 @@ const app = new Vue({
           ]
         };
       } else if (id === 'software') {
-        const buildings = await load('/software/buildings');
-        this.filterOptions.software = { building: toOpts(buildings) };
         this.configs.software = {
           type: 'software', title: 'Программное обеспечение', itemName: 'ПО', showReport: false,
           columns: [
@@ -400,13 +387,22 @@ const app = new Vue({
     },
 
     async loadFilterOptions(id) {
-      const cfg = this.configs[id];
-      if (!cfg || !cfg.filters) return;
-      for (const f of cfg.filters) {
-        if (f.options) continue;
-        const key = f.field;
-        if (this.filterOptions[id] && this.filterOptions[id][key]) continue;
-        // динамические опции уже загружены в buildConfig
+      const load = async (url) => {
+        try { const r = await api.request('GET', url); return r.data || []; } catch (e) { return []; }
+      };
+      const toOpts = (arr) => (arr || []).map(d => ({ value: d, label: d }));
+
+      if (id === 'teachers') {
+        const [departments, degrees, titles, empTypes] = await Promise.all([
+          load('/teachers/departments'), load('/teachers/degrees'), load('/teachers/titles'), load('/teachers/employment-types')
+        ]);
+        this.$set(this.filterOptions, 'teachers', { department: toOpts(departments), degree: toOpts(degrees), title: toOpts(titles), employment_type: toOpts(empTypes) });
+      } else if (id === 'classrooms') {
+        const roomTypes = await load('/classrooms/room-types');
+        this.$set(this.filterOptions, 'classrooms', { room_type: toOpts(roomTypes) });
+      } else if (id === 'software') {
+        const buildings = await load('/software/buildings');
+        this.$set(this.filterOptions, 'software', { building: toOpts(buildings) });
       }
     },
 
@@ -506,7 +502,6 @@ const app = new Vue({
       const st = this.state[id];
       const cfg = this.configs[id];
       if (item) {
-        // fetch fresh
         api.request('GET', '/' + cfg.type + '/' + item.id).then(r => {
           st.editingItem = { ...(r.data || item) };
         }).catch(() => { st.editingItem = { ...item }; });
@@ -644,7 +639,6 @@ const app = new Vue({
 
   template: `
   <div>
-    <!-- ЛОГИН -->
     <div v-if="view === 'login'" class="login-wrapper">
       <div class="login-box">
         <h3>Учебный отдел ВШПМ</h3>
@@ -657,12 +651,10 @@ const app = new Vue({
       </div>
     </div>
 
-    <!-- ЗАГРУЗКА -->
     <div v-else-if="view === 'loading'" class="login-wrapper">
       <div class="spinner"></div>
     </div>
 
-    <!-- ПРИЛОЖЕНИЕ -->
     <div v-else>
       <div class="header">
         <h2>Учебный отдел ВШПМ СПбГУПТД</h2>
@@ -677,7 +669,6 @@ const app = new Vue({
         </div>
         <div class="main">
 
-          <!-- DASHBOARD -->
           <div v-if="section === 'dashboard'">
             <div class="dashboard-header">
               <div class="dashboard-clock">{{ clock }}</div>
@@ -721,7 +712,6 @@ const app = new Vue({
             </div>
           </div>
 
-          <!-- CRUD -->
           <div v-else-if="configs[section] && state[section]" class="card">
             <div class="card-header">
               <h3>{{ configs[section].title }}</h3>
@@ -749,7 +739,6 @@ const app = new Vue({
               </label>
             </div>
 
-            <!-- Поиск свободной аудитории -->
             <div v-if="section === 'classrooms'" class="free-search card">
               <h3>Поиск свободной аудитории</h3>
               <div class="filters-bar">
@@ -816,7 +805,6 @@ const app = new Vue({
               <table>
                 <thead><tr><th>№</th><th v-for="c in configs[section].columns" :key="c.label">{{ c.label }}</th><th v-if="isAdmin"></th></tr></thead>
                 <tbody>
-                  <!-- новая запись -->
                   <tr v-if="state[section].editingItem && !state[section].editingItem.id" class="edit-row">
                     <td :colspan="configs[section].columns.length + 2">
                       <div class="edit-grid">
@@ -836,7 +824,6 @@ const app = new Vue({
                     </td>
                   </tr>
                   <template v-for="(item, i) in state[section].items">
-                    <!-- редактируемая строка -->
                     <tr v-if="state[section].editingItem && state[section].editingItem.id === item.id" :key="'edit-' + item.id" class="edit-row">
                       <td :colspan="configs[section].columns.length + 2">
                         <div class="edit-grid">
@@ -855,7 +842,6 @@ const app = new Vue({
                         </div>
                       </td>
                     </tr>
-                    <!-- обычная строка -->
                     <tr v-else :key="item.id" class="data-row" :class="rowClass(item)">
                       <td class="row-num">{{ ((state[section].page - 1) * state[section].perPage) + i + 1 }}</td>
                       <td v-for="c in configs[section].columns" :key="c.label" v-html="cellValue(item, c)"></td>
@@ -878,7 +864,6 @@ const app = new Vue({
             </div>
           </div>
 
-          <!-- ИМПОРТ -->
           <div v-else-if="section === 'import'" class="card">
             <h3>Импорт данных</h3>
             <div class="form-group"><label>Тип данных</label>
