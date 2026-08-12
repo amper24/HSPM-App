@@ -94,7 +94,7 @@ const app = new Vue({
       try {
         const resp = await fetch('/api/auth/me');
         const data = await resp.json();
-        if (data.success) {
+        if (data.success && data.data && data.data.id) {
           this.user = data.data;
           this.view = 'app';
           this.navigate('dashboard');
