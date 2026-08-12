@@ -99,6 +99,10 @@ function listTeachers(): void {
         $where[] = 't.title = :title';
         $params['title'] = $_GET['title'];
     }
+    if (!empty($_GET['transfer_cancel'])) {
+        $where[] = 'EXISTS (SELECT 1 FROM schedule s WHERE s.teacher_id = t.id AND s.transfer_cancel = :transfer_cancel)';
+        $params['transfer_cancel'] = $_GET['transfer_cancel'];
+    }
     if (!empty($_GET['search'])) {
         $where[] = "(t.last_name LIKE :search OR t.first_name LIKE :search2 OR t.middle_name LIKE :search3)";
         $params['search'] = "%{$_GET['search']}%";

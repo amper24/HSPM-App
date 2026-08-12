@@ -33,6 +33,7 @@ docker compose up -d
 |----------|-----|----------|
 | `file` | file | Файл для импорта |
 | `type` | string | Тип импорта: `teachers`, `classrooms`, `schedule`, `software` |
+| `replace` | string | (опционально, `1`) для `type=schedule` — заменить снимок расписания в диапазоне дат файла (удалить записи, которых больше нет) |
 
 **Ответ (успех)**:
 ```json
@@ -486,7 +487,7 @@ docker exec vshpm-app php /var/www/html/hspm-admin restore /var/www/html/backups
 | Веб-сервер | Apache 2.4 (php:7.2.34-apache) |
 | Бэкенд | PHP 7.2.34 |
 | БД | MySQL 5.7.21 |
-| Фронтенд | Vanilla JS, чистый CSS |
+| Фронтенд | Vue 2 (CDN), чистый CSS |
 | Импорт/Экспорт | PhpSpreadsheet 1.25.2 |
 | Контейнеризация | Docker + Docker Compose |
 

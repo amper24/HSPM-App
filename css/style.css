@@ -117,6 +117,14 @@ tr.edit-row td {padding:12px 12px;}
 .dark-theme .group-search-item {color:#e2e8f0;}
 .dark-theme .group-search-item:hover,.dark-theme .group-search-item.active {background:#263348;}
 
+.free-search {margin-top:16px;}
+.free-search h3 {margin-bottom:12px;font-size:16px;}
+.free-label {display:flex;align-items:center;gap:6px;font-size:13px;color:#606266;margin-right:12px;}
+.free-label input,
+.free-label select {padding:6px 10px;font-size:13px;}
+.free-table th,.free-table td {padding:8px 10px;font-size:13px;border-bottom:1px solid #ebeef5;text-align:left;}
+.dark-theme .free-label {color:#94a3b8;}
+
 .dashboard-schedule {margin-top:16px;}
 .dashboard-schedule .spinner {display:block;margin:20px auto;}
 .dash-table {width:100%;border-collapse:collapse;}

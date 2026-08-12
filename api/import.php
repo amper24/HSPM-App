@@ -22,6 +22,7 @@ function handleImport(string $method, string $action): void {
 
     $type = $_POST['type'] ?? 'teachers';
     $createMissing = !empty($_POST['create_missing']);
+    $replace = !empty($_POST['replace']);
     $file = $_FILES['file']['tmp_name'];
     $ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
 
@@ -39,14 +40,25 @@ function handleImport(string $method, string $action): void {
 
     $imported = 0;
     $createdTeachers = 0;
+    $scheduleData = ['keys' => [], 'min' => null, 'max' => null];
     switch ($actualType) {
         case 'teachers': $imported = importTeachers($spreadsheet, $pdo); break;
         case 'classrooms': $imported = importClassrooms($spreadsheet, $pdo); break;
-        case 'schedule': $imported = importSchedule($spreadsheet, $pdo, $createMissing, $createdTeachers); break;
+        case 'schedule': $imported = importSchedule($spreadsheet, $pdo, $createMissing, $createdTeachers, $replace, $scheduleData); break;
         case 'software': $imported = importSoftware($spreadsheet, $pdo); break;
         default: jsonError('Неизвестный тип импорта: ' . $type);
     }
-    jsonSuccess(['imported' => $imported, 'created_teachers' => $createdTeachers], "Импортировано записей: {$imported}" . ($createdTeachers ? ", создано преподавателей: {$createdTeachers}" : ''));
+
+    $deleted = 0;
+    if ($actualType === 'schedule' && $replace) {
+        $deleted = deleteStaleSchedule($pdo, $scheduleData);
+    }
+
+    $message = "Импортировано записей: {$imported}"
+        . ($createdTeachers ? ", создано преподавателей: {$createdTeachers}" : '')
+        . ($deleted > 0 ? ", удалено устаревших: {$deleted}" : '');
+
+    jsonSuccess(['imported' => $imported, 'created_teachers' => $createdTeachers, 'deleted' => $deleted], $message);
 }
 
 // ====================== TEACHERS ======================
@@ -249,23 +261,23 @@ function importClassroomsSimple($sheet, PDO $pdo): int {
 
 // ====================== SCHEDULE ======================
 
-function importSchedule($spreadsheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+function importSchedule($spreadsheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null, bool $replace = false, &$scheduleData = null): int {
     $createdTeachers = $createdTeachers ?? 0;
     $sheet = $spreadsheet->getActiveSheet();
     
     // Всегда сначала пробуем авто-определение по заголовкам
-    $result = importScheduleByHeaders($sheet, $pdo, $createMissing, $createdTeachers);
+    $result = importScheduleByHeaders($sheet, $pdo, $createMissing, $createdTeachers, $replace, $scheduleData);
     if ($result > 0) return $result;
     
     // Фолбэк на старые фиксированные форматы
     $firstCell = trim((string)($sheet->getCell('A1')->getValue() ?? ''));
     if (mb_stripos($firstCell, 'экзамен') !== false) {
-        return importScheduleSession($sheet, $pdo, $createMissing, $createdTeachers);
+        return importScheduleSession($sheet, $pdo, $createMissing, $createdTeachers, $replace, $scheduleData);
     }
-    return importScheduleRegular($sheet, $pdo, $createMissing, $createdTeachers);
+    return importScheduleRegular($sheet, $pdo, $createMissing, $createdTeachers, $replace, $scheduleData);
 }
 
-function importScheduleByHeaders($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+function importScheduleByHeaders($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null, bool $replace = false, &$scheduleData = null): int {
     $createdTeachers = $createdTeachers ?? 0;
     $maxCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($sheet->getHighestColumn());
     $maxCol = min($maxCol, 30);
@@ -385,12 +397,13 @@ function importScheduleByHeaders($sheet, PDO $pdo, bool $createMissing = false, 
         $sidRes->execute(['dk' => $rowData['dedup_key']]);
         $scheduleId = (int)$sidRes->fetchColumn();
         saveScheduleClassrooms($pdo, $scheduleId, $rows);
+        collectScheduleKey($scheduleData, $rowData['dedup_key'], $rowData['date']);
     }
     
     return $imported;
 }
 
-function importScheduleSession($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+function importScheduleSession($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null, bool $replace = false, &$scheduleData = null): int {
     $createdTeachers = $createdTeachers ?? 0;
     // INSERT ... ON DUPLICATE KEY UPDATE — атомарная защита от дублирования
     $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, teacher_id, numerator_denominator, date, pair_number, time_start, time_end, discipline, group_department, group_code, teacher_department, teacher_position, examiner, exam_type, session_start, session_end, lesson_type, is_occupied, transfer_cancel)
@@ -453,11 +466,12 @@ function importScheduleSession($sheet, PDO $pdo, bool $createMissing = false, &$
             'transfer'       => 'нет',
         ]);
         $imported += ($stmt->rowCount() >= 1) ? 1 : 0;
+        collectScheduleKey($scheduleData, $dedupKey, $date);
     }
     return $imported;
 }
 
-function importScheduleRegular($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+function importScheduleRegular($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null, bool $replace = false, &$scheduleData = null): int {
     $createdTeachers = $createdTeachers ?? 0;
     // Определяем RichText-формат
     $richTextCount = 0;
@@ -470,12 +484,12 @@ function importScheduleRegular($sheet, PDO $pdo, bool $createMissing = false, &$
         }
     }
     if ($richTextCount > 3) {
-        return importScheduleRichText($sheet, $pdo, $createMissing, $createdTeachers);
+        return importScheduleRichText($sheet, $pdo, $createMissing, $createdTeachers, $replace, $scheduleData);
     }
-    return importScheduleSimple($sheet, $pdo, $createMissing, $createdTeachers);
+    return importScheduleSimple($sheet, $pdo, $createMissing, $createdTeachers, $replace, $scheduleData);
 }
 
-function importScheduleSimple($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+function importScheduleSimple($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null, bool $replace = false, &$scheduleData = null): int {
     $createdTeachers = $createdTeachers ?? 0;
     $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, teacher_id, date, pair_number, time_start, time_end, lesson_type, is_occupied)
         VALUES (:dedup_key, :classroom_id, :teacher_id, :date, 1, :time_start, :time_end, :lesson_type, 1)
@@ -515,11 +529,12 @@ function importScheduleSimple($sheet, PDO $pdo, bool $createMissing = false, &$c
             'lesson_type'  => $lessonType !== '' ? $lessonType : null,
         ]);
         $imported++;
+        collectScheduleKey($scheduleData, $dedupKey, $date);
     }
     return $imported;
 }
 
-function importScheduleRichText($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null): int {
+function importScheduleRichText($sheet, PDO $pdo, bool $createMissing = false, &$createdTeachers = null, bool $replace = false, &$scheduleData = null): int {
     $createdTeachers = $createdTeachers ?? 0;
     $stmt = $pdo->prepare("INSERT INTO schedule (dedup_key, classroom_id, teacher_id, date, pair_number, time_start, time_end, lesson_type, is_occupied)
         VALUES (:dedup_key, :classroom_id, :teacher_id, :date, 1, :time_start, :time_end, :lesson_type, 1)
@@ -587,6 +602,15 @@ function importSoftware($spreadsheet, PDO $pdo): int {
         if ($ri) { $rooms[$col] = $ri; ensureClassroom($pdo, $ri['room_number'], $ri['building']); }
     }
 
+    // Файл ПО — авторитетный снимок: удаляем ПО аудиторий из файла,
+    // чтобы исчезнувшие программы не оставались в БД (замена снимка).
+    if ($rooms) {
+        $delete = $pdo->prepare('DELETE FROM software WHERE building = :building AND room_number = :room_number');
+        foreach ($rooms as $ri) {
+            $delete->execute(['building' => $ri['building'], 'room_number' => $ri['room_number']]);
+        }
+    }
+
     $stmt = $pdo->prepare("INSERT INTO software (room_number, building, name) VALUES (:room_number, :building, :name) ON DUPLICATE KEY UPDATE name=VALUES(name)");
     $imported = 0;
     for ($row = 4; $row <= $sheet->getHighestRow(); $row++) {
@@ -631,6 +655,43 @@ function parseClassrooms(string $raw): array {
         }
     }
     return $rooms;
+}
+
+/**
+ * Накапливает ключ импортированной записи и границы диапазона дат файла.
+ * Используется при режиме «заменить» для удаления устаревших записей.
+ */
+function collectScheduleKey(?array &$scheduleData, string $dedupKey, ?string $date): void {
+    if ($scheduleData === null) return;
+    $scheduleData['keys'][] = $dedupKey;
+    if ($date !== null) {
+        if ($scheduleData['min'] === null || $date < $scheduleData['min']) $scheduleData['min'] = $date;
+        if ($scheduleData['max'] === null || $date > $scheduleData['max']) $scheduleData['max'] = $date;
+    }
+}
+
+/**
+ * Удаляет записи расписания, которых больше нет в актуальном файле,
+ * но только внутри диапазона дат этого файла (безопасная замена снимка).
+ */
+function deleteStaleSchedule(PDO $pdo, array $scheduleData): int {
+    $keys = $scheduleData['keys'] ?? [];
+    $min = $scheduleData['min'] ?? null;
+    $max = $scheduleData['max'] ?? null;
+
+    // Без ключей или без диапазона дат безопасно удалить нельзя — пропускаем
+    if (empty($keys) || $min === null || $max === null) return 0;
+
+    $deleted = 0;
+    foreach (array_chunk($keys, 500) as $chunk) {
+        $ph = implode(',', array_fill(0, count($chunk), '?'));
+        $sql = "DELETE FROM schedule WHERE date BETWEEN ? AND ? AND dedup_key NOT IN ({$ph})";
+        $params = array_merge([$min, $max], $chunk);
+        $st = $pdo->prepare($sql);
+        $st->execute($params);
+        $deleted += $st->rowCount();
+    }
+    return $deleted;
 }
 
 /**
