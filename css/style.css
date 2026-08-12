@@ -102,6 +102,12 @@ tr.edit-row td {padding:12px 12px;}
 /* Импорт */
 .import-progress {display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 16px;background:#ecf5ff;border-radius:4px;font-size:13px;color:var(--primary);}
 
+/* Чекбоксы */
+.checkbox-label {display:flex;align-items:center;gap:8px;font-weight:400;font-size:14px;color:#303133;cursor:pointer;margin-bottom:0;}
+.checkbox-label input[type="checkbox"] {width:16px;height:16px;margin:0;accent-color:var(--primary);cursor:pointer;flex-shrink:0;}
+.dark-theme .checkbox-label {color:#e2e8f0;}
+.edit-field input[type="checkbox"] {width:16px;height:16px;accent-color:var(--primary);cursor:pointer;}
+
 /* Dashboard */
 .dashboard-header {background:#fff;padding:20px;border-radius:6px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
 .dashboard-clock {font-size:22px;font-weight:600;color:#303133;margin-bottom:12px;font-variant-numeric:tabular-nums;}

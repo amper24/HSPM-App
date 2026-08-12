@@ -888,10 +888,10 @@ const app = new Vue({
               <input type="file" accept=".xlsx,.xls" @change="onFileChange">
             </div>
             <div class="form-group">
-              <label><input type="checkbox" v-model="importCfg.createMissing"> Создавать отсутствующих преподавателей из расписания</label>
+              <label class="checkbox-label"><input type="checkbox" v-model="importCfg.createMissing"> Создавать отсутствующих преподавателей из расписания</label>
             </div>
             <div v-if="importCfg.type === 'schedule'" class="form-group">
-              <label><input type="checkbox" v-model="importCfg.replace"> Заменить (удалить записи этого файла, которых больше нет)</label>
+              <label class="checkbox-label"><input type="checkbox" v-model="importCfg.replace"> Удалить записи, отсутствующие в файле (режим замены)</label>
             </div>
             <button class="primary" :disabled="importCfg.busy" @click="doImport">Загрузить</button>
             <div class="import-progress" v-if="importCfg.progress"><div class="spinner"></div><span>Импорт данных...</span></div>
