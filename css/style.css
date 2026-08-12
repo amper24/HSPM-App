@@ -175,6 +175,7 @@ body.dark-theme {background:#0f0f23;color:#e2e8f0;}
 .dark-theme tr:hover td {background:#263348;}
 .dark-theme input,.dark-theme select,.dark-theme textarea {background:#0f0f23;border-color:#334155;color:#e2e8f0;}
 .dark-theme input:focus,.dark-theme select:focus,.dark-theme textarea:focus {border-color:var(--primary);}
+.dark-theme input[type="date"]::-webkit-calendar-picker-indicator {filter: invert(1); cursor: pointer;}
 .dark-theme .badge {background:#334155;color:#94a3b8;}
 .dark-theme .badge-success {background:#14532d;color:#6bc96b;}
 .dark-theme .badge-danger {background:#450a0a;color:#ff6b6b;}
