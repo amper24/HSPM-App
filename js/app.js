@@ -56,6 +56,9 @@ const app = new Vue({
   },
 
   computed: {
+    userLabel() {
+      return this.user ? `${this.user.full_name || ''} (${this.user.role || ''})` : '';
+    },
     isAdmin() {
       return this.user && this.user.role === 'admin';
     },
@@ -664,7 +667,7 @@ const app = new Vue({
       <div class="header">
         <h2>Учебный отдел ВШПМ СПбГУПТД</h2>
         <div class="header-user">
-          <span>{{ user.full_name }} ({{ user.role }})</span>
+          <span>{{ userLabel }}</span>
           <button class="outline" @click="logout">Выйти</button>
         </div>
       </div>
