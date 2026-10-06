@@ -6,6 +6,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # 👇 Переменные окружения для всего job.
+    # LARAVEL_BYPASS_ENV_CHECK=1 отключает защитную проверку laravel-vite-plugin,
+    # которая блокирует запуск Vite в CI.
+    env:
+      LARAVEL_BYPASS_ENV_CHECK: 1
+
     services:
       mysql:
         image: mysql:8.4
@@ -31,7 +37,7 @@ jobs:
           node-version: '22'
           cache: npm
 
-      # 👇 Готовим .env для Laravel — без него artisan тоже упадёт
+      # 👇 Готовим .env для Laravel — без него artisan упадёт
       - name: Prepare .env
         run: |
           cp .env.example .env || cp .env.ci .env || true
