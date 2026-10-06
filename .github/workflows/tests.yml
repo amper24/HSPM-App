@@ -1,8 +1,11 @@
 name: Application tests
+
 on: [push, pull_request, workflow_dispatch]
+
 jobs:
   test:
     runs-on: ubuntu-latest
+
     services:
       mysql:
         image: mysql:8.4
@@ -13,21 +16,63 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-only-password --silent"
           --health-interval=10s --health-timeout=5s --health-retries=10
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: pdo_sqlite, pdo_mysql, gd, zip, intl, mbstring
+          coverage: none
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-      - run: composer install --no-interaction --prefer-dist
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - run: php vendor/bin/phpunit
-      - run: php vendor/bin/phpunit -c phpunit.mysql.xml
+
+      # 👇 Готовим .env для Laravel — без него artisan тоже упадёт
+      - name: Prepare .env
+        run: |
+          cp .env.example .env || cp .env.ci .env || true
+
+      # 👇 Создаём папки, которые Laravel ожидает увидеть
+      - name: Create required Laravel directories
+        run: |
+          mkdir -p bootstrap/cache
+          mkdir -p storage/framework/{cache,sessions,views}
+          mkdir -p storage/logs
+          chmod -R 777 bootstrap/cache storage
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-scripts
+
+      # 👇 Запускаем скрипты Laravel (package:discover) ПОСЛЕ создания папок
+      - name: Run Composer scripts (artisan package:discover)
+        run: |
+          php artisan package:discover --ansi
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Run PHPUnit (SQLite)
+        run: php vendor/bin/phpunit
         env:
+          APP_ENV: testing
+
+      - name: Run PHPUnit (MySQL)
+        run: php vendor/bin/phpunit -c phpunit.mysql.xml
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: hspm_test
+          DB_USERNAME: root
           DB_PASSWORD: test-only-password
