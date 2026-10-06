@@ -1,16 +1,60 @@
 {
-    "name": "vshpm/edu-department",
-    "description": "Система сбора и поиска данных для учебного отдела ВШПМ СПбГУПТД",
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "hspm/education-department",
     "type": "project",
+    "description": "РЈС‡РµР±РЅС‹Р№ РѕС‚РґРµР» Р’РЁРџРњ",
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
+    "license": "MIT",
     "require": {
-        "php": ">=7.2",
-"phpoffice/phpspreadsheet": "1.25.2",
-        "psr/simple-cache": "^1.0"
+        "php": "^8.4",
+        "laravel/framework": "^13.17",
+        "phpoffice/phpspreadsheet": "^5.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.27",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^12.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": [
+            "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan test"
+        ],
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
     },
     "config": {
         "optimize-autoloader": true,
-        "platform": {
-            "php": "7.2.34"
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
         }
-    }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

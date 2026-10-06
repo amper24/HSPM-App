@@ -1,33 +1,16 @@
-# Git
-.git/
-.gitignore
-
-# Документация задания
-Прил_Уч_отдел - задание/
-
-# Локальные настройки
+.git
 .env
-.env .example
-*.md
-
-# Composer
-vendor/
-
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
-
-# Временные и отладочные файлы
-_debug_*
-*.py
-*.pyc
-__pycache__/
-cookies.txt
-
-# IDE
-.vscode/
-.idea/
-
-# macOS
-.DS_Store
+.env.*
+!.env.example
+node_modules
+vendor
+public/build
+public/hot
+storage/logs/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/cache/data/*
+storage/app/private/*
+!storage/app/private/.gitignore
+database/*.sqlite
+.phpunit.cache
