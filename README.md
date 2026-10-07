@@ -10,6 +10,44 @@
 
 В старом ТЗ указаны PHP 7.2 и Ubuntu 16.04. Эта версия на PHP 7.2 **не запускается**. Серверную среду нужно обновить. Vue 2.7 сохранён по исходному ТЗ; переход на Vue 3 в этот рефакторинг не включён.
 
+## Быстрая установка (Linux)
+
+Скрипт полностью автоматизирует развёртывание в Docker: клонирует проект, сгенерирует пароли БД, запросит пароль администратора (минимум 12 символов), создаст `APP_KEY`, соберёт образы, применит миграции и создаст администратора.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/amper24/HSPM-App/main/install.sh | bash
+```
+
+После завершения приложение доступно по адресу `http://localhost:8080`.
+
+**Требуется:** Git, Docker Engine и плагин Docker Compose v2.
+
+### Параметры
+
+```bash
+# свой порт и каталог установки
+curl -fsSL https://raw.githubusercontent.com/amper24/HSPM-App/main/install.sh \
+  | HSPM_PORT=9000 HSPM_INSTALL_DIR=/opt/hspm bash
+
+# свой пароль администратора (без интерактивного запроса)
+curl -fsSL https://raw.githubusercontent.com/amper24/HSPM-App/main/install.sh \
+  | HSPM_ADMIN_PASSWORD='MyStrongPass1234' bash
+```
+
+| Переменная            | По умолчанию     | Описание                                    |
+|-----------------------|------------------|---------------------------------------------|
+| `HSPM_INSTALL_DIR`    | `HSPM-App`       | каталог установки                           |
+| `HSPM_PORT`           | `8080`           | порт веб-интерфейса                         |
+| `HSPM_ADMIN_USERNAME` | `admin`          | логин администратора                        |
+| `HSPM_ADMIN_PASSWORD` | запрос при старте| пароль администратора, минимум 12 символов  |
+| `HSPM_NONINTERACTIVE` | `0`              | `1` — без вопросов, пароль сгенерируется    |
+| `HSPM_MODE`           | `docker`         | `docker` или `local`                        |
+| `HSPM_REPO_URL`       | URL репозитория  | источник (для форков)                       |
+
+Сам скрипт — [`install.sh`](./install.sh). Его можно скачать, прочитать и запустить локально вместо `curl | bash`.
+
+Для установки без Docker используйте `HSPM_MODE=local` — скрипт поставит зависимости через Composer и npm, настроит SQLite и создаст администратора. Далее запуск: `php artisan serve`.
+
 ## Запуск в Docker
 
 Команды выполняются из каталога проекта. Сначала скопируйте `.env.example` в `.env` и задайте `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `ADMIN_PASSWORD` (не менее 12 символов), а также `APP_URL` и `APP_PORT`.
