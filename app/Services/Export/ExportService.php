@@ -9,8 +9,22 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
+/**
+ * Формирование Excel-выгрузок.
+ *
+ * Отделяет выборку данных от оформления: данные получает через EducationQuery или
+ * OccupancyReport, а оформлением занимаются классы *Workbook. Файлы сохраняются на
+ * диске «local» в каталоге пользователя вне public/.
+ */
 class ExportService
 {
+    /**
+     * Создаёт файл выгрузки и возвращает его имя.
+     *
+     * @param  string  $type   Тип: teachers|classrooms|schedule|software|report.
+     * @param  int     $userId Идентификатор пользователя (владельца файла).
+     * @return string Уникальное имя файла вида <uuid>.xlsx.
+     */
     public function create(string $type, int $userId): string
     {
         abort_unless(in_array($type, ['teachers', 'classrooms', 'schedule', 'software', 'report']), 404, 'Неизвестный тип экспорта');

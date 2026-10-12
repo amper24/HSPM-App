@@ -7,9 +7,23 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-/** Табличные сессии и недельные сетки разбираются отдельно; SQL здесь отсутствует. */
+/**
+ * Разбор расписания из Excel.
+ *
+ * Табличные сессии и недельные сетки разбираются раздельно (tabular() и
+ * WeeklyScheduleParser соответственно). Парсер не выполняет SQL. Журнал переносов
+ * с диапазонами дат отклоняется явно.
+ */
 class ScheduleParser
 {
+    /**
+     * Разбирает все видимые листы книги.
+     *
+     * @param  Spreadsheet  $book Загруженная книга.
+     * @return array<int, array<string, mixed>> Строки занятий.
+     *
+     * @throws ValidationException Если лист похож на журнал переносов.
+     */
     public function parse(Spreadsheet $book): array
     {
         $records = [];
@@ -27,6 +41,13 @@ class ScheduleParser
         return $records;
     }
 
+    /**
+     * Разбирает табличный формат: находит строку заголовков и читает данные ниже.
+     *
+     * @param  Worksheet  $sheet Лист.
+     * @return array<int, array<string, mixed>>|null Строки занятий или null, если
+     *         табличный заголовок не найден (тогда лист считается недельной сеткой).
+     */
     private function tabular(Worksheet $sheet): ?array
     {
         $columns = min(60, Coordinate::columnIndexFromString($sheet->getHighestDataColumn()));
@@ -93,6 +114,12 @@ class ScheduleParser
         return $records;
     }
 
+    /**
+     * Сопоставляет текст заголовка с внутренним полем.
+     *
+     * @param  string  $header Текст заголовка колонки.
+     * @return string|null Имя поля (date, group_code, discipline, …) или null.
+     */
     private function header(string $header): ?string
     {
         $header = mb_strtolower(preg_replace('/[\s\-]+/u', '', $header));
@@ -118,6 +145,14 @@ class ScheduleParser
         return null;
     }
 
+    /**
+     * Определяет номер пары по времени начала, используя фиксированный список.
+     *
+     * Нестандартному времени не назначается вымышленная пара — возвращается null.
+     *
+     * @param  string|null  $time Время начала в формате H:i:s.
+     * @return int|null Номер пары (1..8) или null.
+     */
     public function pair(?string $time): ?int
     {
         // Только известные интервалы; нестандартному времени не назначаем вымышленную пару.
@@ -127,6 +162,12 @@ class ScheduleParser
         return $index === false ? null : $index + 1;
     }
 
+    /**
+     * Определяет, является ли строка «подвалом» документа (подписи должностных лиц).
+     *
+     * @param  string  $text Текст ячейки дисциплины.
+     * @return bool true, если строка — подпись, и её нужно пропустить.
+     */
     private function isFooter(string $text): bool
     {
         return (bool) preg_match('/^(директор|начальник|ведущий документовед|согласовано|утверждаю)/ui', trim($text));

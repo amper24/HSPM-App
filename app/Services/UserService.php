@@ -5,9 +5,26 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Изменение и удаление пользователей с защитой последнего администратора.
+ *
+ * Все операции идут внутри транзакции и блокируют строки администраторов
+ * (lockForUpdate), чтобы параллельные запросы не могли одновременно удалить или
+ * понизить последнего администратора.
+ */
 class UserService
 {
-    /** Блокируем администраторов в одном порядке, чтобы параллельные запросы не удалили последнего. */
+    /**
+     * Обновляет или удаляет пользователя с учётом инвариантов.
+     *
+     * @param  int        $id      Идентификатор изменяемого пользователя.
+     * @param  array|null $data    Новые данные; null означает удаление записи.
+     * @param  int        $actorId Идентификатор текущего пользователя.
+     * @return \App\Models\User|null Обновлённая запись или null при удалении.
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException 422 при попытке
+     *         удалить/понизить последнего администратора или удалить собственную запись.
+     */
     public function change(int $id, ?array $data, int $actorId): ?User
     {
         return DB::transaction(function () use ($id, $data, $actorId) {

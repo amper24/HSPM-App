@@ -5,9 +5,17 @@ namespace App\Services\Export;
 use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
-/** Формирует Excel для Schedule. Получает готовые данные, не обращается к БД. */
+/**
+ * Формирует Excel расписания. Получает готовые данные, не обращается к БД.
+ */
 class ScheduleWorkbook
 {
+    /**
+     * Строит книгу расписания.
+     *
+     * @param  array  $items Занятия в плоском виде (см. ScheduleData::from()).
+     * @return Spreadsheet Готовая книга.
+     */
     public function build(array $items): Spreadsheet
     {
 

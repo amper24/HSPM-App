@@ -5,9 +5,20 @@ namespace App\Services\Export;
 use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
-/** Формирует Excel для Software. Получает готовые данные, не обращается к БД. */
+/**
+ * Формирует Excel ПО в транспонированном виде (аудитории — колонки).
+ *
+ * Повторяет исходный формат листа «ПО», чтобы файл можно было загрузить обратно
+ * импортом. Получает готовые данные, не обращается к БД.
+ */
 class SoftwareWorkbook
 {
+    /**
+     * Строит книгу ПО, группируя программы по аудиториям в порядке появления.
+     *
+     * @param  array  $items Записи ПО с атрибутами модели.
+     * @return Spreadsheet Готовая книга.
+     */
     public function build(array $items): Spreadsheet
     {
 

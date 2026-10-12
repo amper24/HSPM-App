@@ -53,3 +53,7 @@ docker compose exec app php artisan hspm:admin admin
 Перед интерактивной сменой удалите `ADMIN_PASSWORD` из окружения контейнера и пересоздайте его; иначе команда использует значение окружения.
 
 Для удаления экспортов старше суток запускайте `php artisan hspm:exports-clean` либо настройте стандартный Laravel scheduler: `php artisan schedule:run` раз в минуту. Scheduler не запускается отдельным сервисом в прилагаемом Compose.
+
+---
+
+См. также: [README](../README.md), [DEVELOPMENT.md](DEVELOPMENT.md), [CONFIGURATION.md](CONFIGURATION.md).

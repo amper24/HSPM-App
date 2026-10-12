@@ -4,9 +4,22 @@ namespace App\Http\Resources;
 
 use App\Models\ScheduleEntry;
 
-/** Представление расписания без привязки браузера к структуре Eloquent-связей. */
+/**
+ * Плоское представление записи расписания для клиента.
+ *
+ * Скрывает структуру Eloquent-связей: вместо вложенных объектов преподавателя и
+ * аудиторий отдаёт готовые строки (teacher_name, room_number, building, classrooms).
+ * Это делает контракт API стабильным и не зависящим от внутренней реализации ORM.
+ */
 class ScheduleData
 {
+    /**
+     * Преобразует модель занятия в массив для JSON-ответа.
+     *
+     * @param  ScheduleEntry  $entry Занятие с загруженными связями teacher, classroom, rooms.
+     * @return array<string, mixed> Плоский массив атрибутов + вычисленные поля
+     *                              room_number, building, teacher_name, classrooms.
+     */
     public static function from(ScheduleEntry $entry): array
     {
         $data = $entry->attributesToArray();

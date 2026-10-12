@@ -5,9 +5,17 @@ namespace App\Services\Export;
 use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
-/** Формирует Excel для Report. Получает готовые данные, не обращается к БД. */
+/**
+ * Формирует Excel отчёта по занятости. Получает готовые данные, не обращается к БД.
+ */
 class ReportWorkbook
 {
+    /**
+     * Строит книгу отчёта.
+     *
+     * @param  array  $report Строки сводки занятости (см. OccupancyReport::rows()).
+     * @return Spreadsheet Готовая книга.
+     */
     public function build(array $report): Spreadsheet
     {
 

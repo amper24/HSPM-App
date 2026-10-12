@@ -11,12 +11,27 @@ use App\Services\Schedule\ScheduleKey;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/** Пакетная запись. SQL-запросы растут по числу пакетов, а не ячеек Excel. */
+/**
+ * Пакетная запись импортированных строк в БД.
+ *
+ * SQL-запросы растут по числу пакетов (по 200 записей), а не по числу ячеек Excel.
+ * Вся запись оборачивается в транзакцию: ошибка в любом шаге откатывает импорт
+ * целиком, включая вновь созданные аудитории.
+ */
 class ImportWriter
 {
-    public function save(string $type, array $rows, bool $createMissing, bool $replace, array $softwareRooms = []): array
+    /**
+     * Записывает строки выбранного типа в транзакции.
+     *
+     * @param  string  $type          Тип: teachers|classrooms|software|schedule.
+     * @param  array   $rows          Разобранные строки.
+     * @param  bool    $replace       Заменять ли данные групп в диапазоне дат файла (schedule).
+     * @param  array   $softwareRooms Аудитории из листа ПО (для замены состава).
+     * @return array{imported: int, deleted: int}
+     */
+    public function save(string $type, array $rows, bool $replace = false, array $softwareRooms = []): array
     {
-        return DB::transaction(function () use ($type, $rows, $createMissing, $replace, $softwareRooms) {
+        return DB::transaction(function () use ($type, $rows, $replace, $softwareRooms) {
             if ($type === 'teachers') {
                 foreach ($rows as &$row) {
                     $row['middle_name'] = $row['middle_name'] ?? '';
@@ -41,14 +56,24 @@ class ImportWriter
                 unset($row);
                 $this->upsert(Software::class, $rows, ['room_number', 'building', 'name']);
             } else {
-                return $this->schedule($rows, $createMissing, $replace);
+                return $this->schedule($rows, $replace);
             }
 
-            return ['imported' => count($rows), 'created_teachers' => 0, 'deleted' => 0];
+            return ['imported' => count($rows), 'deleted' => 0];
         });
     }
 
-    private function schedule(array $rows, bool $createMissing, bool $replace): array
+    /**
+     * Записывает расписание: сопоставляет преподавателей, рассчитывает dedup_key,
+     * сворачивает дубликаты и обновляет связи с аудиториями пакетами.
+     *
+     * @param  array  $rows    Строки занятий.
+     * @param  bool   $replace Удалять ли занятия групп из файла, отсутствующие в нём.
+     * @return array{imported: int, deleted: int}
+     *
+     * @throws ValidationException Если включён replace, но не у всех строк есть дата и группа.
+     */
+    private function schedule(array $rows, bool $replace): array
     {
         $rooms = [];
         foreach ($rows as $row) {
@@ -56,7 +81,6 @@ class ImportWriter
         }
         $roomMap = $this->ensureRooms($rooms);
         $teachers = Teacher::all(['id', 'last_name', 'first_name', 'middle_name'])->groupBy(fn ($teacher) => mb_strtolower($teacher->last_name));
-        $createdTeachers = 0;
         $relations = [];
         $records = [];
         $groups = [];
@@ -67,7 +91,7 @@ class ImportWriter
                 $roomIds[] = $roomMap[$room['building'].'|'.$room['room_number']];
             }
             $row['classroom_id'] = $roomIds[0] ?? null;
-            $row['teacher_id'] = $this->teacher($row, $teachers, $createMissing, $createdTeachers);
+            $row['teacher_id'] = $this->teacher($row, $teachers);
             $row['dedup_key'] = ScheduleKey::make($row);
             // Дубликаты внутри файла сворачиваются до обращения к базе.
             $records[$row['dedup_key']] = $row;
@@ -110,10 +134,21 @@ class ImportWriter
                 });
         }
 
-        return ['imported' => count($records), 'created_teachers' => $createdTeachers, 'deleted' => $deleted];
+        return ['imported' => count($records), 'deleted' => $deleted];
     }
 
-    private function teacher(array $row, $teachers, bool $create, int &$created): ?int
+    /**
+     * Сопоставляет текст экзаменатора с существующим преподавателем.
+     *
+     * Возвращается только однозначное совпадение по фамилии и инициалам. Неоднозначные
+     * и неизвестные ФИО не назначаются и не создаются — они остаются текстом в поле
+     * examiner.
+     *
+     * @param  array       $row     Строка занятия (содержит examiner).
+     * @param  \Illuminate\Support\Collection  $teachers Справочник преподавателей, сгруппированный по фамилии.
+     * @return int|null Идентификатор преподавателя или null.
+     */
+    private function teacher(array $row, $teachers): ?int
     {
         $name = trim($row['examiner'] ?? '');
         if ($name === '') {
@@ -125,20 +160,16 @@ class ImportWriter
             return (! isset($parts[1]) || str_starts_with(mb_strtolower($teacher->first_name), mb_strtolower($parts[1])))
                 && (! isset($parts[2]) || str_starts_with(mb_strtolower($teacher->middle_name ?? ''), mb_strtolower($parts[2])));
         });
-        if ($matches->count() === 1) {
-            return $matches->first()->id;
-        }
-        // Несколько преподавателей в одной ячейке остаются текстом examiner.
-        if (! $create || $matches->count() > 1 || count($parts) > 3) {
-            return null;
-        }
-        $teacher = Teacher::create(['last_name' => $parts[0], 'first_name' => $parts[1] ?? '—', 'middle_name' => $parts[2] ?? '', 'department' => $row['teacher_department'] ?? null, 'position' => $row['teacher_position'] ?? null]);
-        $teachers[$surname] = ($teachers[$surname] ?? collect())->push($teacher);
-        $created++;
 
-        return $teacher->id;
+        return $matches->count() === 1 ? $matches->first()->id : null;
     }
 
+    /**
+     * Создаёт отсутствующие аудитории и возвращает карту «корпус|номер => id».
+     *
+     * @param  array  $rooms Список аудиторий [{building, room_number}, …].
+     * @return array<string, int> Карта для сопоставления.
+     */
     private function ensureRooms(array $rooms): array
     {
         $unique = [];
@@ -152,6 +183,17 @@ class ImportWriter
         return Classroom::all(['id', 'building', 'room_number'])->mapWithKeys(fn ($room) => [$room->building.'|'.$room->room_number => $room->id])->all();
     }
 
+    /**
+     * Массово вставляет/обновляет строки (upsert) пакетами, нормализуя поля.
+     *
+     * Все строки пакета приводятся к единому набору fillable-полей с дефолтами
+     * (is_occupied=1, is_nonstandard_time=0, transfer_cancel=нет), затем upsert
+     * выполняется чанками по 200 записей.
+     *
+     * @param  string  $model  Имя класса модели (Teacher|Classroom|Software|ScheduleEntry).
+     * @param  array   $rows   Строки для записи.
+     * @param  array   $unique Колонки, образующие уникальный ключ для upsert.
+     */
     private function upsert(string $model, array $rows, array $unique): void
     {
         if (! $rows) {

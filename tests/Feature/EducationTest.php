@@ -124,12 +124,12 @@ class EducationTest extends TestCase
     {
         $writer = app(ImportWriter::class);
         $row = ['date' => '2026-09-30', 'time_start' => '08:30:00', 'discipline' => 'Математика', 'group_code' => 'A', 'classrooms_raw' => 'Д101, Д102', 'examiner' => null, 'is_occupied' => 1];
-        $writer->save('schedule', [$row], false, false);
-        $writer->save('schedule', [$row], false, false);
+        $writer->save('schedule', [$row]);
+        $writer->save('schedule', [$row]);
         $this->assertDatabaseCount('schedule', 1);
         $this->assertDatabaseCount('schedule_classrooms', 2);
-        $writer->save('schedule', [array_replace($row, ['group_code' => 'B']), array_replace($row, ['discipline' => 'Старый предмет'])], false, false);
-        $writer->save('schedule', [$row], false, true);
+        $writer->save('schedule', [array_replace($row, ['group_code' => 'B']), array_replace($row, ['discipline' => 'Старый предмет'])]);
+        $writer->save('schedule', [$row], true);
         $this->assertDatabaseCount('schedule', 2);
         $this->assertDatabaseHas('schedule', ['group_code' => 'B']);
         $this->assertDatabaseMissing('schedule', ['discipline' => 'Старый предмет']);
@@ -143,7 +143,7 @@ class EducationTest extends TestCase
     public function test_import_failure_rolls_back_new_rooms(): void
     {
         try {
-            app(ImportWriter::class)->save('schedule', [['discipline' => 'Недельное занятие', 'classrooms_raw' => 'Д777', 'group_code' => 'A']], false, true);
+            app(ImportWriter::class)->save('schedule', [['discipline' => 'Недельное занятие', 'classrooms_raw' => 'Д777', 'group_code' => 'A']], true);
             $this->fail('Expected validation failure');
         } catch (ValidationException $exception) {
             $this->assertDatabaseCount('classrooms', 0);

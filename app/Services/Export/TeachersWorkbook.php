@@ -5,9 +5,20 @@ namespace App\Services\Export;
 use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
-/** Формирует Excel для Teachers. Получает готовые данные, не обращается к БД. */
+/**
+ * Формирует Excel преподавателей из двух листов: основные данные и контакты.
+ *
+ * Повторяет исходный формат списка преподавателей, чтобы файл можно было загрузить
+ * обратно импортом. Получает готовые данные, не обращается к БД.
+ */
 class TeachersWorkbook
 {
+    /**
+     * Строит книгу преподавателей.
+     *
+     * @param  array  $teachers Массив преподавателей с атрибутами модели.
+     * @return Spreadsheet Готовая книга (активный лист — «Преподаватели»).
+     */
     public function build(array $teachers): Spreadsheet
     {
 

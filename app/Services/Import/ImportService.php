@@ -5,10 +5,27 @@ namespace App\Services\Import;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
-/** Загрузка книги, выбор парсера и атомарная запись результата. */
+/**
+ * Загрузка книги Excel, выбор парсера и атомарная запись результата.
+ *
+ * Единственная точка входа импорта как из браузера (ImportController), так и из
+ * командной строки (ImportCommand). Освобождение ресурсов книги гарантируется в
+ * блоке finally.
+ */
 class ImportService
 {
-    public function import(string $path, string $type, bool $createMissing = false, bool $replace = false): array
+    /**
+     * Импортирует файл выбранного типа.
+     *
+     * @param  string  $path    Путь к файлу .xlsx/.xls.
+     * @param  string  $type    Тип: teachers|classrooms|schedule|software.
+     * @param  bool    $replace Заменять ли данные групп в диапазоне дат файла (для schedule).
+     * @return array{imported: int, deleted?: int} Счётчики результата.
+     *
+     * @throws \Illuminate\Validation\ValidationException Если файл пуст или не содержит
+     *         записей выбранного типа.
+     */
+    public function import(string $path, string $type, bool $replace = false): array
     {
         $readerType = IOFactory::identify($path, ['Xlsx', 'Xls']);
         $reader = IOFactory::createReader($readerType);
@@ -24,7 +41,7 @@ class ImportService
                 throw ValidationException::withMessages(['file' => 'В файле не найдены записи выбранного типа. База данных не изменена.']);
             }
 
-            return app(ImportWriter::class)->save($type, $rows, $createMissing, $replace, $parsed['rooms'] ?? []);
+            return app(ImportWriter::class)->save($type, $rows, $replace, $parsed['rooms'] ?? []);
         } finally {
             $book->disconnectWorksheets();
         }

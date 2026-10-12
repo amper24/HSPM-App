@@ -6,9 +6,22 @@ use App\Models\Classroom;
 use App\Models\ScheduleEntry;
 use Illuminate\Support\Facades\DB;
 
-/** Запись занятия и всех его аудиторий выполняется одной транзакцией. */
+/**
+ * Транзакционное сохранение занятия и его аудиторий.
+ *
+ * При изменении строки аудиторий разбирает её, создаёт отсутствующие аудитории,
+ * сохраняет занятие с пересчитанным dedup_key и синхронизирует связи через sync().
+ * Всё выполняется в одной транзакции, поэтому ошибка откатывает и занятие, и связи.
+ */
 class ScheduleService
 {
+    /**
+     * Создаёт или обновляет занятие.
+     *
+     * @param  array<string, mixed>  $data Валидированные данные (класс ScheduleRequest).
+     * @param  int|null              $id   Идентификатор существующего занятия или null для создания.
+     * @return ScheduleEntry Сохранённое занятие с загруженными связями teacher, classroom, rooms.
+     */
     public function save(array $data, ?int $id = null): ScheduleEntry
     {
         return DB::transaction(function () use ($data, $id) {

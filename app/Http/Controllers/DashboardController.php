@@ -4,8 +4,19 @@ namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Счётчики справочников для главной страницы.
+ *
+ * Собирает четыре COUNT одним SQL-запросом через подзапросы, вместо четырёх
+ * отдельных запросов и выборок полных списков.
+ */
 class DashboardController extends Controller
 {
+    /**
+     * Возвращает число записей по каждому разделу.
+     *
+     * @return \Illuminate\Http\JsonResponse {teachers, classrooms, schedule, software}
+     */
     public function __invoke()
     {
         // Один SQL вместо четырёх COUNT и четырёх ненужных выборок списков.

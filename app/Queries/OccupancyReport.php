@@ -5,10 +5,24 @@ namespace App\Queries;
 use Illuminate\Support\Facades\DB;
 
 /** Агрегация по всем аудиториям, включая дополнительные аудитории одного занятия. */
+/**
+ * Агрегация занятости по всем аудиториям.
+ *
+ * Учитывает как основную аудиторию занятия (schedule.classroom_id), так и
+ * дополнительные связи (schedule_classrooms). Строит сводку одним SQL с UNION и
+ * условными SUM, не выгружая строки занятий в PHP.
+ */
 class OccupancyReport
 {
+    /**
+     * Возвращает по каждой аудитории число занятий, занятых записей, переносов и отмен.
+     *
+     * @return array<int, array<string, mixed>> Строки сводки с полями total_lessons,
+     *                                           occupied_count, transfers, cancellations.
+     */
     public function rows(): array
     {
+        // Все связи «занятие — аудитория»: основная аудитория + дополнительные.
         $links = DB::table('schedule_classrooms')->select('schedule_id', 'classroom_id')
             ->union(DB::table('schedule')->whereNotNull('classroom_id')->selectRaw('id as schedule_id, classroom_id'));
         $totals = DB::query()->fromSub($links, 'links')->join('schedule as s', 's.id', '=', 'links.schedule_id')

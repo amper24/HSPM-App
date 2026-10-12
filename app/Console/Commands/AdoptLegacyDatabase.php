@@ -11,13 +11,25 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/** Регистрирует исходную схему как уже существующую, не пересоздавая таблицы. */
+/**
+ * Подключение существующей базы старого приложения к миграциям Laravel.
+ *
+ * Не пересоздаёт таблицы и не меняет данные: только проверяет совпадение схемы и
+ * помечает начальную миграцию как выполненную, чтобы последующие миграции
+ * (расширение полей, индексы) применились поверх существующих таблиц.
+ */
 class AdoptLegacyDatabase extends Command
 {
     protected $signature = 'hspm:adopt-legacy {--backup-confirmed : Резервная копия создана и проверена}';
 
     protected $description = 'Подключить существующую базу старого приложения к миграциям Laravel';
 
+    /**
+     * Проверяет схему и регистрирует начальную миграцию.
+     *
+     * @return int FAILURE при отсутствии резервной копии или несовпадении схемы,
+     *             SUCCESS при успешной регистрации.
+     */
     public function handle(): int
     {
         if (! $this->option('backup-confirmed')) {

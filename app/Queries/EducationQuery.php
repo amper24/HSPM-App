@@ -10,8 +10,22 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
 /** Фильтры списков. Имена полей берутся только из разрешённых списков. */
+/**
+ * Фабрика Eloquent-запросов с разрешёнными фильтрами и сортировкой.
+ *
+ * Единственное место, где определено, какие поля запроса могут фильтровать данные:
+ * имена колонок берутся только из явно заданных списков, поэтому параметры из URL
+ * не превращаются в произвольный SQL (защита от подмены колонок).
+ */
 class EducationQuery
 {
+    /**
+     * Строит запрос по ресурсу с применением фильтров, поиска и сортировки.
+     *
+     * @param  string  $resource Ключ ресурса: teachers|classrooms|schedule|software|users.
+     * @param  array   $filters  Сырые параметры запроса (обычно $request->query()).
+     * @return \Illuminate\Database\Eloquent\Builder Готовый к выполнению запрос.
+     */
     public function for(string $resource, array $filters = []): Builder
     {
         $model = match ($resource) {
@@ -19,6 +33,7 @@ class EducationQuery
             'schedule' => ScheduleEntry::class, 'software' => Software::class, 'users' => User::class,
         };
         $query = $model::query();
+        // Точные фильтры: значение подставляется в WHERE как есть.
         $exactFields = match ($resource) {
             'teachers' => ['department', 'employment_type', 'degree', 'title'],
             'classrooms' => ['building', 'room_type', 'has_projector', 'has_speakers'],
@@ -31,6 +46,7 @@ class EducationQuery
                 $query->where($field, $filters[$field]);
             }
         }
+        // Поиск: отдельные слова ФИО ищутся в разных колонках одной записи (ИЛИ-группа).
         $search = trim((string) ($filters['search'] ?? $filters['fio'] ?? ''));
         $searchFields = match ($resource) {
             'teachers' => ['last_name', 'first_name', 'middle_name'],

@@ -6,9 +6,23 @@ use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-/** Чтение пустых координат не создаёт миллионы пустых ячеек в оформленных файлах. */
+/**
+ * Чтение значений ячеек Excel без создания лишних объектов.
+ *
+ * Использование cellExists() перед getCell() не порождает миллионы пустых ячеек в
+ * файлах с оформлением (границы, заливки) за пределами данных. Формульные ячейки
+ * читаются по последнему вычисленному значению.
+ */
 class ExcelValue
 {
+    /**
+     * Возвращает значение ячейки по координатам (1-индексация), null для пустой.
+     *
+     * @param  Worksheet  $sheet  Лист книги.
+     * @param  int        $column Номер колонки (начиная с 1).
+     * @param  int        $row    Номер строки (начиная с 1).
+     * @return mixed Сырое значение ячейки.
+     */
     public static function cell(Worksheet $sheet, int $column, int $row): mixed
     {
         if (! $sheet->cellExists([$column, $row])) {
@@ -19,11 +33,26 @@ class ExcelValue
         return $cell->getDataType() === 'f' ? $cell->getOldCalculatedValue() : $cell->getValue();
     }
 
+    /**
+     * Преобразует значение в обрезанную строку (раскрывает RichText).
+     *
+     * @param  mixed  $value Значение ячейки.
+     * @return string Текстовое представление без ведущих/замыкающих пробелов.
+     */
     public static function text(mixed $value): string
     {
         return trim($value instanceof RichText ? $value->getPlainText() : (string) ($value ?? ''));
     }
 
+    /**
+     * Преобразует значение в дату Y-m-d.
+     *
+     * Поддерживает DateTimeInterface, Excel-серийный номер даты и текстовые форматы
+     * «YYYY-MM-DD» и «DD.MM.YYYY». Некорректные даты (например 31.02.2026) дают null.
+     *
+     * @param  mixed  $value Значение ячейки.
+     * @return string|null Дата в формате Y-m-d или null.
+     */
     public static function date(mixed $value): ?string
     {
         if ($value === null || $value === '') {
@@ -48,6 +77,15 @@ class ExcelValue
         return null;
     }
 
+    /**
+     * Преобразует значение в пару [время_начала, время_окончания].
+     *
+     * Числовой Excel-формат (доля суток) переводится в HH:MM:SS. Текст разбирается
+     * регулярным выражением, извлекающим до двух значений времени.
+     *
+     * @param  mixed  $value Значение ячейки.
+     * @return array{0: string|null, 1: string|null} Два времени или null-элементы.
+     */
     public static function time(mixed $value): array
     {
         if (is_numeric($value) && $value >= 0 && $value < 1) {

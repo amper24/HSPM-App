@@ -2,9 +2,20 @@
 
 namespace App\Services\Import;
 
-/** Читает Excel и возвращает строки. Не выполняет SQL и не меняет БД. */
+/**
+ * Читает Excel преподавателей и возвращает строки. Не выполняет SQL и не меняет БД.
+ *
+ * Первый лист содержит основные данные (ФИО, должность, степень, кафедра/занятость),
+ * второй (если есть) — контакты. Данные объединяются по нормализованному ФИО.
+ */
 class TeacherParser
 {
+    /**
+     * Разбирает книгу преподавателей.
+     *
+     * @param  \PhpOffice\PhpSpreadsheet\Spreadsheet  $spreadsheet Загруженная книга.
+     * @return array<int, array<string, mixed>> Строки преподавателей.
+     */
     public function parse($spreadsheet): array
     {
         $sheetNames = $spreadsheet->getSheetNames();

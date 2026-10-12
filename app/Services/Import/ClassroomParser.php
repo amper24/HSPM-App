@@ -4,9 +4,20 @@ namespace App\Services\Import;
 
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
-/** Читает Excel и возвращает строки. Не выполняет SQL и не меняет БД. */
+/**
+ * Читает Excel аудиторий и возвращает строки. Не выполняет SQL и не меняет БД.
+ *
+ * Поддерживает два формата: старый специальный лист «Тех хар-ка» и универсальную
+ * таблицу с распознаванием колонок по заголовкам.
+ */
 class ClassroomParser
 {
+    /**
+     * Разбирает книгу аудиторий, выбирая формат по наличию листа «Тех хар-ка».
+     *
+     * @param  \PhpOffice\PhpSpreadsheet\Spreadsheet  $spreadsheet Загруженная книга.
+     * @return array<int, array<string, mixed>> Строки аудиторий.
+     */
     public function parse($spreadsheet): array
     {
         // Пытаемся найти лист «Тех хар-ка» (старый спец-формат)
@@ -19,6 +30,12 @@ class ClassroomParser
         return $this->parseHeaderTable($spreadsheet->getActiveSheet());
     }
 
+    /**
+     * Разбирает специальный лист «Тех хар-ка» с фиксированными колонками A..G.
+     *
+     * @param  \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet  $sheet Лист.
+     * @return array<int, array<string, mixed>> Строки аудиторий.
+     */
     private function parseTechnicalSheet($sheet): array
     {
         $rows = [];
@@ -43,6 +60,14 @@ class ClassroomParser
         return $rows;
     }
 
+    /**
+     * Разбирает таблицу, определяя колонки по тексту заголовков первой строки.
+     *
+     * Если не удалось определить колонку номера аудитории, возвращает пустой массив.
+     *
+     * @param  \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet  $sheet Лист.
+     * @return array<int, array<string, mixed>> Строки аудиторий.
+     */
     private function parseHeaderTable($sheet): array
     {
         $columnCount = Coordinate::columnIndexFromString($sheet->getHighestColumn());

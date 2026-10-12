@@ -5,9 +5,20 @@ namespace App\Services\Export;
 use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
-/** Формирует Excel для Classrooms. Получает готовые данные, не обращается к БД. */
+/**
+ * Формирует Excel для аудиторий. Получает готовые данные, не обращается к БД.
+ *
+ * Значения записываются через StringValueBinder как текст, поэтому строка,
+ * начинающаяся с «=», не превращается в формулу.
+ */
 class ClassroomsWorkbook
 {
+    /**
+     * Строит книгу аудиторий.
+     *
+     * @param  array  $rooms Массив аудиторий с атрибутами модели.
+     * @return Spreadsheet Готовая книга.
+     */
     public function build(array $rooms): Spreadsheet
     {
 

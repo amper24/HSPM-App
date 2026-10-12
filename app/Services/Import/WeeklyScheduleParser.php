@@ -5,9 +5,21 @@ namespace App\Services\Import;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-/** Недельная сетка: отдельная запись для каждой группы и ячейки занятия. */
+/**
+ * Разбор недельной сетки расписания.
+ *
+ * Формат: колонка групп (шифр вида «1-ТИД-1»), колонка дней недели и колонка часов.
+ * Для каждой группы и ячейки создаётся отдельная запись. Календарная дата не
+ * подставляется: такие занятия хранятся с пустой датой и днём недели.
+ */
 class WeeklyScheduleParser
 {
+    /**
+     * Разбирает недельную сетку листа.
+     *
+     * @param  Worksheet  $sheet Лист.
+     * @return array<int, array<string, mixed>> Строки занятий (без календарной даты).
+     */
     public function parse(Worksheet $sheet): array
     {
         $maxColumn = min(150, Coordinate::columnIndexFromString($sheet->getHighestDataColumn()));
@@ -82,6 +94,14 @@ class WeeklyScheduleParser
         return $records;
     }
 
+    /**
+     * Ищет блок заголовков групп на строке (курсы могут размещаться блоками ниже).
+     *
+     * @param  Worksheet  $sheet     Лист.
+     * @param  int        $row       Номер строки.
+     * @param  int        $maxColumn Максимальная колонка для сканирования.
+     * @return array<int, array<string, mixed>> Карта «колонка => описание группы».
+     */
     private function header(Worksheet $sheet, int $row, int $maxColumn): array
     {
         $groups = [];
@@ -105,6 +125,15 @@ class WeeklyScheduleParser
         return $hasTimeLabel ? $groups : [];
     }
 
+    /**
+     * Возвращает значение ячейки с учётом объединения: обращается к верхнему левому углу.
+     *
+     * @param  Worksheet  $sheet        Лист.
+     * @param  int        $column       Колонка.
+     * @param  int        $row          Строка.
+     * @param  array      $mergedCells  Карта объединённых ячеек.
+     * @return mixed Значение из ячейки-источника.
+     */
     private function value(Worksheet $sheet, int $column, int $row, array $mergedCells): mixed
     {
         $origin = $mergedCells[$row][$column] ?? ['column' => $column, 'row' => $row];
@@ -112,6 +141,16 @@ class WeeklyScheduleParser
         return ExcelValue::cell($sheet, $origin['column'], $origin['row']);
     }
 
+    /**
+     * Строит карту объединённых ячеек: для каждой координаты хранит верхний левый угол.
+     *
+     * Слишком большие объединения (>10000 ячеек) пропускаются, чтобы не расходовать
+     * память на оформление листа.
+     *
+     * @param  Worksheet  $sheet     Лист.
+     * @param  int        $maxColumn Ограничение по колонкам.
+     * @return array<int, array<int, array{column: int, row: int, endColumn: int}>>
+     */
     private function mergedCells(Worksheet $sheet, int $maxColumn): array
     {
         $cells = []; // Координаты объединённой ячейки => её верхний левый угол.

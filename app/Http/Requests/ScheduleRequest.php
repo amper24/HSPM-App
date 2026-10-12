@@ -7,11 +7,25 @@ use Illuminate\Foundation\Http\FormRequest;
 /** Проверка полей формы до выполнения запросов на изменение данных. */
 class ScheduleRequest extends FormRequest
 {
+    /**
+     * Разрешает запрос только администратору (актуальная роль из БД).
+     *
+     * @return bool true, если текущий пользователь имеет роль «admin».
+     */
     public function authorize(): bool
     {
         return $this->user()?->role === 'admin';
     }
 
+    /**
+     * Правила валидации записи расписания.
+     *
+     * Большинство полей опциональны: занятие может быть как полным (дата, время,
+     * группа), так и строкой недельной сетки (только день недели). Связи classroom_id
+     * и teacher_id проверяются существованием записей в БД.
+     *
+     * @return array<string, mixed> Карта «поле => правила валидации».
+     */
     public function rules(): array
     {
         $rules = [

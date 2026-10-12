@@ -5,13 +5,25 @@ namespace App\Console\Commands;
 use App\Models\User;
 use Illuminate\Console\Command;
 
-/** Пароль вводится скрыто или берётся из окружения при первом запуске контейнера. */
+/**
+ * Управление учётной записью администратора.
+ *
+ * Пароль вводится скрыто (secret) либо берётся из переменной окружения
+ * ADMIN_PASSWORD — это используется при первом запуске Docker-контейнера, где
+ * интерактивный ввод невозможен.
+ */
 class AdminCommand extends Command
 {
     protected $signature = 'hspm:admin {username=admin} {--create : Создать только отсутствующую учётную запись}';
 
     protected $description = 'Создать администратора или изменить его пароль';
 
+    /**
+     * Создаёт администратора или обновляет его пароль.
+     *
+     * @return int SUCCESS при успехе, FAILURE при пустом/коротком пароле или когда
+     *             в режиме --create учётная запись уже существует.
+     */
     public function handle(): int
     {
         $username = $this->argument('username');

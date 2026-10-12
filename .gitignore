@@ -31,3 +31,6 @@ public/build/
 public/hot
 .phpunit.cache/
 database/*.sqlite
+
+# Локальная документация для оформления в .docx (не публикуется в репозитории)
+РУКОВОДСТВО_ПО_ЭКСПЛУАТАЦИИ.md
