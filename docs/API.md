@@ -74,13 +74,125 @@
 Полнотекстовый поиск: `search` (для преподавателей также `fio`). Для аудиторий —
 `seats_min`, `computers_count_min`, `sort_seats=asc|desc`.
 
-## Поля расписания
+## Поля ресурсов
 
-Основные поля создаваемой записи (см. `ScheduleRequest`): `classroom_id`, `teacher_id`,
-`classrooms` (строка аудиторий), `date`, `day_of_week`, `time_start`, `time_end`,
-`pair_number`, `discipline`, `group_code`, `group_department`, `examiner`, `exam_type`,
-`lesson_type`, `transfer_cancel` (`нет|перенос|отмена`), `is_occupied`,
-`is_nonstandard_time`, `numerator_denominator`, `session_start`, `session_end`.
+### teachers
+
+| Поле | Тип | Правила валидации |
+| --- | --- | --- |
+| `last_name` | string | required, max:100 |
+| `first_name` | string | required, max:100 |
+| `middle_name` | string | nullable, max:100 |
+| `position` | string | nullable, max:255 |
+| `degree` | string | nullable, max:100 |
+| `title` | string | nullable, max:100 |
+| `department` | string | nullable, max:100 |
+| `employment_type` | string | nullable, max:50 |
+| `email` | string | nullable, email, max:255 |
+| `phone` | string | nullable, max:50 |
+| `notes` | string | nullable, max:10000 |
+
+### classrooms
+
+| Поле | Тип | Правила валидации |
+| --- | --- | --- |
+| `room_number` | string | required, max:20 |
+| `building` | string | required, max:5 (`Д`, `В`, `БМ`) |
+| `room_type` | string | required, max:50 |
+| `software_installed` | string | nullable, max:10000 |
+| `seats` | integer | nullable, min:0 |
+| `computers_count` | integer | nullable, min:0 |
+| `has_projector` | boolean | sometimes |
+| `has_speakers` | boolean | sometimes |
+
+### software
+
+| Поле | Тип | Правила валидации |
+| --- | --- | --- |
+| `name` | string | required, max:255 |
+| `room_number` | string | nullable, max:20 |
+| `building` | string | nullable, max:5 |
+| `classroom_id` | integer | nullable, exists:classrooms,id |
+| `notes` | string | nullable, max:10000 |
+
+### schedule
+
+| Поле | Тип | Правила валидации |
+| --- | --- | --- |
+| `classroom_id` | integer | nullable, exists:classrooms,id |
+| `teacher_id` | integer | nullable, exists:teachers,id |
+| `classrooms` | string | nullable, max:255 — строка аудиторий «Д234, В105» |
+| `classrooms_raw` | string | nullable, max:255 |
+| `date` | string | nullable, date_format:Y-m-d |
+| `time_start` | string | nullable, H:i или H:i:s |
+| `time_end` | string | nullable, H:i или H:i:s |
+| `session_start` | string | nullable, date_format:Y-m-d |
+| `session_end` | string | nullable, date_format:Y-m-d |
+| `pair_number` | integer | nullable, min:1, max:20 |
+| `is_occupied` | boolean | sometimes |
+| `is_nonstandard_time` | boolean | sometimes |
+| `transfer_cancel` | string | nullable, in:нет,перенос,отмена |
+| `discipline` | string | nullable, max:10000 |
+| `examiner` | string | nullable, max:10000 |
+| `group_code` | string | nullable, max:50 |
+| `group_department` | string | nullable, max:100 |
+| `teacher_department` | string | nullable, max:100 |
+| `teacher_position` | string | nullable, max:100 |
+| `numerator_denominator` | string | nullable, max:20 |
+| `day_of_week` | string | nullable, max:20 |
+| `lesson_type` | string | nullable, max:20 |
+| `exam_type` | string | nullable, max:20 |
+
+### users
+
+| Поле | Тип | Правила валидации |
+| --- | --- | --- |
+| `username` | string | required, max:50, уникальный |
+| `password` | string | required при создании, min:8, max:255; пустое при обновлении — «не менять пароль» |
+| `role` | string | required, in:user,admin |
+| `full_name` | string | nullable, max:255 |
+
+## Структура списка (пагинация)
+
+Ответ `GET /api/{resource}`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [ { "id": 1, "...": "..." } ],
+    "pagination": { "page": 1, "per_page": 50, "total": 120, "pages": 3 }
+  },
+  "message": "OK"
+}
+```
+
+`per_page` принимает значения от 1 до 100 (по умолчанию 50).
+
+## Примеры запросов
+
+Вход:
+
+```bash
+curl -c cookies.txt -H 'Accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"..."}' \
+  http://127.0.0.1:8000/api/auth/login
+```
+
+Список преподавателей с поиском (с сессией):
+
+```bash
+curl -b cookies.txt -H 'X-Requested-With: XMLHttpRequest' \
+  'http://127.0.0.1:8000/api/teachers?search=%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2&per_page=20'
+```
+
+Свободные аудитории:
+
+```bash
+curl -b cookies.txt -H 'X-Requested-With: XMLHttpRequest' \
+  'http://127.0.0.1:8000/api/classrooms/free?date=2026-09-30&pair_number=2&building=%D0%94'
+```
 
 ---
 

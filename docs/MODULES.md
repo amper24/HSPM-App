@@ -81,6 +81,100 @@
   выгрузок и её расписание.
 - **database/migrations/** — схема БД и её расширение/индексы.
 
+## Полный перечень файлов
+
+### app/Http/Controllers
+
+- `Controller` — базовый контроллер, единый формат ответа `success()`.
+- `ResourceController` — пагинация, чтение, удаление, очистка, `present()`.
+- `TeacherController`, `ClassroomController`, `SoftwareController` — CRUD через Eloquent.
+- `ScheduleController` — CRUD через `ScheduleService` + `bulkDelete()`.
+- `UserController` — CRUD через `UserService`.
+- `AuthController` — вход, текущий пользователь, выход.
+- `DashboardController` — счётчики справочников (один SQL).
+- `ExportController` — формирование и выдача выгрузок.
+- `FreeClassroomController` — поиск свободных аудиторий.
+- `ImportController` — приём Excel и запуск импорта.
+- `LookupController` — значения фильтров (`options`) и поиск (`search`).
+
+### app/Http/Requests
+
+- `ClassroomRequest`, `SoftwareRequest`, `TeacherRequest`, `ScheduleRequest`,
+  `UserRequest` — правила валидации и авторизация `authorize()`.
+
+### app/Http/Middleware
+
+- `RequireAdmin` — проверка роли `admin` (alias `admin`).
+
+### app/Http/Resources
+
+- `ScheduleData` — плоское представление занятия (teacher_name, rooms).
+
+### app/Models
+
+- `User`, `Teacher`, `Classroom`, `ScheduleEntry`, `Software` — Eloquent-модели,
+  касты типов и связи.
+
+### app/Queries
+
+- `EducationQuery` — фабрика запросов с разрешёнными фильтрами и сортировкой.
+- `OccupancyReport` — отчёт по занятости одним SQL.
+
+### app/Services/Import
+
+- `ImportService` — загрузка книги, выбор парсера, запись.
+- `ImportWriter` — транзакционная пакетная запись (чанки по 200).
+- `TeacherParser` — чтение списка преподавателей (два листа).
+- `ClassroomParser` — чтение аудиторий («Тех хар-ка» или таблица по заголовкам).
+- `SoftwareParser` — чтение транспонированного листа «ПО».
+- `ScheduleParser` — табличные формы расписания.
+- `WeeklyScheduleParser` — недельные сетки.
+- `ExcelValue` — чтение ячеек, дат и времени.
+- `ValueNormalizer` — нормализация справочников (кафедры, занятость, ФИО).
+
+### app/Services/Export
+
+- `ExportService` — выборка данных и сохранение файла вне `public/`.
+- `TeachersWorkbook`, `ClassroomsWorkbook`, `ScheduleWorkbook`, `SoftwareWorkbook`,
+  `ReportWorkbook` — оформление книг Excel.
+- `WorkbookStyle` — стили заголовков.
+
+### app/Services/Schedule
+
+- `ScheduleService` — транзакционное сохранение занятия и аудиторий.
+- `RoomParser` — разбор строки аудиторий.
+- `ScheduleKey` — детерминированный ключ дедупликации.
+
+### app/Services
+
+- `UserService` — защита последнего администратора.
+
+### app/Console/Commands
+
+- `AdminCommand` — `hspm:admin`.
+- `AdoptLegacyDatabase` — `hspm:adopt-legacy`.
+- `ImportCommand` — `hspm:import`.
+
+### resources/js
+
+- `main.js` — точка входа Vue.
+- `App.vue` — оболочка SPA, меню, тема.
+- `views/DashboardView.vue` — главная страница.
+- `views/RecordsView.vue` — списки справочников.
+- `views/ImportView.vue` — импорт.
+- `components/RecordForm.vue` — форма создания и редактирования.
+- `components/ListPagination.vue` — пагинация.
+- `components/LoginForm.vue` — вход.
+- `components/FreeClassrooms.vue` — поиск свободных аудиторий.
+- `store/auth.js` — сессия.
+- `store/records.js` — состояние списков.
+- `store/dashboard.js` — состояние главной.
+- `store/index.js` — корневое хранилище Vuex.
+- `services/http.js` — HTTP-клиент (CSRF, ошибки, повтор 419).
+- `services/education.js` — предметные методы API.
+- `config/resources.js` — описание колонок, фильтров и форм.
+- `utils/format.js` — чистые функции форматирования.
+
 ## Точки расширения
 
 - Новый тип справочника: модель + миграция + FormRequest + контроллер + `resources.js`
